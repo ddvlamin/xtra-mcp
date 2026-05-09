@@ -1,0 +1,26 @@
+{
+    "name": "xtra-mcp",
+    "build": {
+        "dockerfile": "./Dockerfile",
+        "context": ".."
+    },
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "ms-python.python",
+                "ms-python.vscode-pylance",
+                "ms-toolsai.jupyter",
+                "google.geminicodeassist",
+                "mechatroner.rainbow-csv",
+                "ms-toolsai.datawrangler",
+                "google.gemini-cli-vscode-ide-companion"
+            ],
+            "settings": {
+                "python.defaultInterpreterPath":"/workspaces/xtra-mcp/.venv/bin/python"
+            }
+        }
+    },
+    //"postCreateCommand": "pip install uv && uv sync --group dev",
+    "forwardPorts": [8888],
+    "remoteUser": "root"
+}
