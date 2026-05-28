@@ -7,4 +7,7 @@ requires-python = ">=3.12"
 dependencies = [
     "mcp>=1.27.0",
     "omega-memory[server]",
+    "httpx",
+    "pydantic",
+    "python-dotenv"
 ]

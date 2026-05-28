@@ -4,23 +4,37 @@
         "dockerfile": "./Dockerfile",
         "context": ".."
     },
+    "workspaceFolder": "/workspaces",
+    "workspaceMount": "source=${localWorkspaceFolder},target=/workspaces,type=bind",
     "customizations": {
         "vscode": {
             "extensions": [
                 "ms-python.python",
                 "ms-python.vscode-pylance",
                 "ms-toolsai.jupyter",
-                "google.geminicodeassist",
                 "mechatroner.rainbow-csv",
                 "ms-toolsai.datawrangler",
-                "google.gemini-cli-vscode-ide-companion"
+                "google.gemini-cli-vscode-ide-companion",
+                "tomoki1207.pdf",
+                "davidanson.vscode-markdownlint",
+                "github.vscode-pull-request-github",
+                "mermaidchart.vscode-mermaid-chart",
+                "pomdtr.excalidraw-editor",
+                "hashicorp.terraform"
             ],
             "settings": {
-                "python.defaultInterpreterPath":"/workspaces/xtra-mcp/.venv/bin/python"
+                "python.defaultInterpreterPath": "/workspaces/.venv/bin/python"
             }
         }
     },
-    //"postCreateCommand": "pip install uv && uv sync --group dev",
-    "forwardPorts": [8888],
-    "remoteUser": "root"
+    "features": {
+        "ghcr.io/devcontainers/features/github-cli:1": {}
+    },
+    "mounts": [
+        "source=${localEnv:HOME}/.config/gh,target=/home/vscode/.config/gh,type=bind,consistency=cached"
+    ],
+    "postCreateCommand": "uv sync --group dev --frozen",
+    "forwardPorts": [
+        8888
+    ]
 }
