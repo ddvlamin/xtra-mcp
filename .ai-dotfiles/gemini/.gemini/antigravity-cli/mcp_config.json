@@ -1,0 +1,210 @@
+{
+  "mcpServers": {
+    "browser-use": {
+      "serverUrl": "https://api.browser-use.com/mcp",
+      "headers": {
+        "x-browser-use-api-key": "YOUR_BROWSER_USE_KEY_HERE"
+      }
+    },
+    "browserbase": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@browserbasehq/mcp-server-browserbase"
+      ],
+      "env": {
+        "BROWSERBASE_API_KEY": "YOUR_BROWSERBASE_KEY_HERE"
+      }
+    },
+    "clickhouse": {
+      "serverUrl": "https://mcp.clickhouse.cloud/mcp",
+      "disabled": true
+    },
+    "cloudflare-docs": {
+      "serverUrl": "https://docs.mcp.cloudflare.com/mcp",
+      "disabled": true
+    },
+    "cloudflare-observability": {
+      "serverUrl": "https://observability.mcp.cloudflare.com/mcp",
+      "disabled": true
+    },
+    "cloudflare-workers-bindings": {
+      "serverUrl": "https://bindings.mcp.cloudflare.com/mcp"
+    },
+    "cloudflare-workers-builds": {
+      "serverUrl": "https://builds.mcp.cloudflare.com/mcp",
+      "disabled": true
+    },
+    "confluence": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "confluence-mcp-server"
+      ],
+      "env": {
+        "CONFLUENCE_API_TOKEN": "YOUR_CONFLUENCE_TOKEN_HERE",
+        "CONFLUENCE_BASE_URL": "YOUR_CONFLUENCE_URL_HERE",
+        "CONFLUENCE_EMAIL": "YOUR_EMAIL_HERE"
+      },
+      "disabled": true
+    },
+    "context7": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@upstash/context7-mcp@latest"
+      ]
+    },
+    "devfleet": {
+      "serverUrl": "http://localhost:18801/mcp",
+      "disabled": true
+    },
+    "duckduckgo": {
+      "command": "web-search-mcp"
+    },
+    "evalview": {
+      "command": "python3",
+      "args": [
+        "-m",
+        "evalview",
+        "mcp",
+        "serve"
+      ],
+      "env": {
+        "OPENAI_API_KEY": "YOUR_OPENAI_API_KEY_HERE"
+      },
+      "disabled": true
+    },
+    "exa-web-search": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "exa-mcp-server"
+      ],
+      "env": {
+        "EXA_API_KEY": "YOUR_EXA_API_KEY_HERE"
+      },
+      "disabled": true
+    },
+    "fal-ai": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "fal-ai-mcp-server"
+      ],
+      "env": {
+        "FAL_KEY": "YOUR_FAL_KEY_HERE"
+      },
+      "disabled": true
+    },
+    "fetch": {
+      "command": "uvx",
+      "args": [
+        "mcp-server-fetch",
+        "--ignore-robots-txt"
+      ]
+    },
+    "filesystem": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "/workspaces/"
+      ]
+    },
+    "firecrawl": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "firecrawl-mcp"
+      ],
+      "env": {
+        "FIRECRAWL_API_KEY": "$FIRECRAWL_KEY"
+      }
+    },
+    "github": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-github"
+      ],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "$GITHUB_TOKEN"
+      }
+    },
+    "jira": {
+      "command": "uvx",
+      "args": [
+        "mcp-atlassian==0.21.0"
+      ],
+      "env": {
+        "JIRA_API_TOKEN": "YOUR_JIRA_API_TOKEN_HERE",
+        "JIRA_EMAIL": "YOUR_JIRA_EMAIL_HERE",
+        "JIRA_URL": "YOUR_JIRA_URL_HERE"
+      },
+      "disabled": true
+    },
+    "laraplugins": {
+      "serverUrl": "https://laraplugins.io/mcp/plugins",
+      "disabled": true
+    },
+    "magic": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@magicuidesign/mcp@latest"
+      ]
+    },
+    "memory": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-memory"
+      ],
+      "disabled": true
+    },
+    "omega-memory": {
+      "command": "/workspaces/.venv/bin/omega",
+      "args": [
+        "serve"
+      ]
+    },
+    "playwright": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@playwright/mcp",
+        "--browser",
+        "chrome"
+      ]
+    },
+    "railway": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@railway/mcp-server"
+      ],
+      "disabled": true
+    },
+    "sequential-thinking": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-sequential-thinking"
+      ]
+    },
+    "supabase": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@supabase/mcp-server-supabase@latest",
+        "--project-ref=YOUR_PROJECT_REF"
+      ],
+      "disabled": true
+    },
+    "vercel": {
+      "serverUrl": "https://mcp.vercel.com",
+      "disabled": true
+    }
+  }
+}
