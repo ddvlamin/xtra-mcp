@@ -1,0 +1,7 @@
+[[rules]]
+name = "Allow pr-creator to push code"
+subagent = "pr-creator"
+description = "Permit pr-creator to push branches automatically."
+action = "allow"
+toolName = "run_shell_command"
+commandPrefix = "git push"

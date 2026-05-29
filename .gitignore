@@ -121,7 +121,38 @@ cython_debug/
 
 # VS Code
 .vscode/
-.ai-dotfiles
-.skills
 .antigravitycli
-.devcontainer/devcontainer-lock.json
+
+
+# Gemini CLI personal state/secrets
+**/.gemini/oauth_creds.json
+**/.gemini/google_accounts.json
+**/.gemini/installation_id
+**/.gemini/state.json
+**/.gemini/history/
+**/.gemini/tmp/
+**/.gemini/config/
+**/.gemini/projects.json
+**/.gemini/trustedFolders.json
+
+**/.gemini/antigravity-cli/antigravity-oauth-token
+**/.gemini/antigravity-cli/brain/**
+**/.gemini/antigravity-cli/cache/**
+**/.gemini/antigravity-cli/implicit/**
+**/.gemini/antigravity-cli/conversations/**
+**/.gemini/antigravity-cli/knowledge/**
+**/.gemini/antigravity-cli/log/**
+**/.gemini/antigravity-cli/updater/**
+**/.gemini/antigravity-cli/mcp/**
+**/.gemini/antigravity-cli/cli.log
+**/.gemini/antigravity-cli/installation_id
+**/.gemini/antigravity-cli/keybindings.json
+**/.gemini/antigravity-cli/last_check.timestamp
+**/.gemini/antigravity-cli/bin/**
+**/.gemini/antigravity-cli/history.jsonl
+
+.antigravitycli/**
+
+.ai-dotfiles/.antigravitycli/**
+
+.worktrees/

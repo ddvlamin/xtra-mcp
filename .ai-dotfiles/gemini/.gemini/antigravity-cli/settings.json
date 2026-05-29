@@ -1,0 +1,45 @@
+{
+  "colorScheme": "colorblind-friendly dark",
+  "model": "Gemini 3.5 Flash (Medium)",
+  "permissions": {
+    "allow": [
+      "command(ls)",
+      "command(find)",
+      "command(which)",
+      "command(git status)",
+      "command(git check-ignore)",
+      "command(git ls-files)",
+      "command(git diff)",
+      "command(git rev-parse)",
+      "command(cd)",
+      "command(git log)",
+      "command(git show)",
+      "command(mkdir)",
+      "command(cp)",
+      "command(agy)",
+      "command(xargs)",
+      "command(head)",
+      "command(cat)",
+      "command(grep)",
+      "command(npx)",
+      "command(git remote)",
+      "mcp(github/*)",
+      "command(ps)",
+      "command(env)",
+      "command(uniq)",
+      "command(sed)",
+      "command(tail)",
+      "command(strings)",
+      "mcp(duckduckgo/web_search)"
+    ]
+  },
+  "statusLine": {
+    "type": "",
+    "command": "",
+    "enabled": true
+  },
+  "trustedWorkspaces": [
+    "/workspaces"
+  ],
+  "verbosity": "low"
+}

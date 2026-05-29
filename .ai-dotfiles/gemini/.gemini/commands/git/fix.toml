@@ -1,0 +1,4 @@
+# Invoked via: /git:fix "Button is misaligned"
+
+description = "Generates a fix for a given issue."
+prompt = "Please provide a code fix for the issue described here: {{args}}."

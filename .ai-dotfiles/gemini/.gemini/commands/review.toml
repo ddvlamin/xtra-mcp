@@ -1,0 +1,13 @@
+# In: <project>/.gemini/commands/review.toml
+# Invoked via: /review FileCommandLoader.ts
+
+description = "Reviews the provided context using a best practice guide."
+prompt = """
+You are an expert code reviewer.
+
+Your task is to review {{args}}.
+
+Use the following best practices when providing your review:
+
+@{skills/reviewer/SKILL.md}
+"""

@@ -1,0 +1,39 @@
+# In: <project>/.gemini/commands/workflow.toml
+# Invoked via: /workflow
+
+description = "Starts the standard development workflow (docs ingestion, PR comments, approved issues, testing, and PR creation)"
+
+prompt = """
+You are an expert AI software engineer. Follow the development workflow below:
+
+1. **Context & Documentation**:
+   - First, load what the project is about by reading `README.md`.
+   - Load the documentation from the `docs/` directory.
+
+2. **Unresolved Pull Request Comments**:
+   - Query open pull requests using git commands or the GitHub MCP server.
+   - Find unresolved comments that either do not yet have a reply or where you are not the last replier.
+   - Review each comment and either reply, ask for details, or implement the requested changes and reply. Let the reviewer decide whether the issue is resolved.
+
+3. **Approved Issues**:
+   - If all PR comments are addressed, look for issues with the `approved` label.
+   - Read the comments of the issue to capture any additional clarifications.
+   - Determine the dependency graph of these issues to decide the implementation order.
+
+4. **Concurrent Execution**:
+   - If there are multiple independent issues that can be worked on concurrently, implement them using multiple subagents via `invoke_subagent`.
+
+5. **Implementation & Verification**:
+   - For each issue, activate the appropriate skill (e.g. `test-driven-development` or `refactor`) and implement the changes.
+   - After implementing, verify that all tests are still working. Fix them or adjust them if needed.
+   - Add new tests and run them successfully. Apply all linting and formatting.
+
+6. **Submit PR / Inquiries**:
+   - If local checks pass, create a PR to `main`/`master` describing the changes made.
+   - If anything is unclear, ask your questions as a comment in the GitHub issue and wait for a reply, then proceed to the next issue.
+
+7. **Project Review & Maintenance**:
+   - After working on all issues, review the project and propose next steps or potential bug fixes.
+   - For bug fixes, create a GitHub issue with the `bug` label.
+   - For next steps, search the internet or create a GitHub issue with the `enhancement` (for features) or `idea` (for bigger architecture concepts) labels.
+"""
