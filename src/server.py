@@ -1,4 +1,6 @@
 import os
+import sys
+import argparse
 import asyncio
 from typing import List, Optional, Dict, Any
 from mcp.server import Server
@@ -71,8 +73,12 @@ async def handle_list_tools() -> List[types.Tool]:
 @server.call_tool()
 async def handle_call_tool(name: str, arguments: Dict[str, Any]) -> List[types.TextContent]:
     global client
-    if not client:
-        return [types.TextContent(type="text", text="Error: Client not initialized. Please provide session_id.")]
+    if not client or not client.session_id:
+        return [types.TextContent(
+            type="text",
+            text="Error: Colruyt client not properly initialized. "
+                 "Please set the CLPBFF_SESSION environment variable or pass --session-id at server startup."
+        )]
 
     try:
         if name == "get_most_bought_products":
@@ -148,11 +154,17 @@ async def handle_call_tool(name: str, arguments: Dict[str, Any]) -> List[types.T
 
 async def main():
     global client
-    session_id = os.environ.get("CLPBFF_SESSION")
-    api_key = os.environ.get("X_CG_APIKEY")
+    
+    parser = argparse.ArgumentParser(description="Colruyt Xtra MCP Server")
+    parser.add_argument("--session-id", "-s", help="Colruyt Xtra session ID (clpbff_session cookie)")
+    parser.add_argument("--api-key", "-a", help="Custom x-cg-apikey header value")
+    args, unknown = parser.parse_known_args()
+
+    session_id = args.session_id or os.environ.get("CLPBFF_SESSION")
+    api_key = args.api_key or os.environ.get("X_CG_APIKEY")
 
     if not session_id:
-        print("Warning: CLPBFF_SESSION environment variable not set.")
+        print("Warning: session_id not set via CLI argument or CLPBFF_SESSION environment variable.", file=sys.stderr)
     
     client = ColruytClient(session_id=session_id, api_key=api_key)
 
