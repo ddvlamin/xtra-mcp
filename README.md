@@ -4,10 +4,20 @@ An MCP server for the Colruyt Xtra app, allowing AI assistants to manage your sh
 
 ## Features
 
-- **get_most_bought_products**: Fetch your frequently purchased items.
-- **search_products**: Search the Colruyt catalog.
-- **add_items_to_list**: Add products directly to your list.
-- **add_recipe_to_list**: Parse markdown recipes and add ingredients with intelligent disambiguation.
+- **resolve_ingredient**: Resolve an ingredient string to a Colruyt product using local SQLite fuzzy matching, catalog search API, and purchase history.
+- **store_resolved_product**: Save user-selected product mappings to the local SQLite database for future automatic matching.
+- **add_items_to_list**: Add products directly to your Colruyt shopping list.
+- **add_recipe_to_list**: Parse markdown recipe files and add ingredients with intelligent disambiguation.
+
+## Environment Variables
+
+The server requires the following environment variables (see `.env.example`):
+
+| Variable | Description | Example / Default |
+| --- | --- | --- |
+| `CLPBFF_SESSION` | Colruyt Xtra session cookie ID | `your_session_id_here` |
+| `X_CG_APIKEY` | Colruyt Xtra API key (or `COLRUYT_API_KEY`) | `your_api_key_here` |
+| `COLRUYT_PLACE_ID` | Colruyt store / place ID | `2643` |
 
 ## Setup
 
@@ -16,15 +26,42 @@ An MCP server for the Colruyt Xtra app, allowing AI assistants to manage your sh
    ```bash
    uv sync
    ```
-3. Set your environment variables (see `.env.example`):
+3. Set environment variables in your environment or `.env` file:
    ```bash
-   export CLPBFF_SESSION=your_session_id
+   export CLPBFF_SESSION="your_session_id"
+   export X_CG_APIKEY="your_api_key_here"
+   export COLRUYT_PLACE_ID="2643"
    ```
 
 ## Running the Server
 
 ```bash
 python xtra/server.py
+```
+
+## AGY CLI MCP Configuration
+
+To install `server.py` as an MCP server in AGY CLI, add `colruyt-xtra` to `mcp_config.json` (located at `~/.gemini/antigravity-cli/mcp_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "colruyt-xtra": {
+      "command": "python",
+      "args": [
+        "-m",
+        "xtra.server"
+      ],
+      "cwd": "/path/to/xtra-mcp",
+      "env": {
+        "PYTHONPATH": "/path/to/xtra-mcp",
+        "CLPBFF_SESSION": "your_session_id",
+        "X_CG_APIKEY": "your_api_key_here",
+        "COLRUYT_PLACE_ID": "2643"
+      }
+    }
+  }
+}
 ```
 
 ## Recipe Integration

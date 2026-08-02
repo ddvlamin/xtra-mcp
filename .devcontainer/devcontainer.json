@@ -4,8 +4,8 @@
         "dockerfile": "./Dockerfile",
         "context": ".."
     },
-    "workspaceFolder": "/workspaces",
-    "workspaceMount": "source=${localWorkspaceFolder},target=/workspaces,type=bind",
+    "workspaceFolder": "/workspace",
+    "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind",
     "customizations": {
         "vscode": {
             "extensions": [
@@ -20,21 +20,27 @@
                 "github.vscode-pull-request-github",
                 "mermaidchart.vscode-mermaid-chart",
                 "pomdtr.excalidraw-editor",
-                "hashicorp.terraform"
+                "hashicorp.terraform",
+                "qwtel.sqlite-viewer"
             ],
             "settings": {
-                "python.defaultInterpreterPath": "/workspaces/.venv/bin/python"
+                "python.defaultInterpreterPath":"/workspace/.venv/bin/python"
             }
         }
     },
     "features": {
-        "ghcr.io/devcontainers/features/github-cli:1": {}
+        "ghcr.io/devcontainers/features/github-cli:1": {},
+        "ghcr.io/devcontainers/features/node:1": {
+            "version": "22"
+        }
     },
     "mounts": [
-        "source=${localEnv:HOME}/.config/gh,target=/home/vscode/.config/gh,type=bind,consistency=cached"
     ],
-    "postCreateCommand": "uv sync --group dev --frozen",
-    "forwardPorts": [
-        8888
-    ]
+    "remoteEnv": {
+        "DEEPSEEK_API_KEY": "${localEnv:DEEPSEEK_API_KEY}",
+        "CORTECS_API_KEY": "${localEnv:CORTECS_API_KEY}",
+        "GOOGLE_GENERATIVE_AI_API_KEY": "${localEnv:GOOGLE_GENERATIVE_AI_API_KEY}"
+    },
+    "postCreateCommand": "bash .devcontainer/post_setup.sh",
+    "forwardPorts": [8888]
 }

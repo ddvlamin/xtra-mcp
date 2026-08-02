@@ -1,7 +1,7 @@
 import os
 import pytest
 from unittest.mock import patch
-from xtra.client import ColruytClient
+from xtra.colruyt import ColruytClient, ColruytProduct
 
 def test_client_init_missing_api_key():
     with patch.dict(os.environ, {}, clear=True):
@@ -43,3 +43,16 @@ def test_client_init_success_with_alternate_env_key():
     }, clear=True):
         client = ColruytClient(session_id="dummy_session")
         assert client.api_key == "alt_env_key"
+
+def test_colruyt_product_to_product_transformation():
+    cp = ColruytProduct(
+        name="Kipfilet",
+        technicalArticleNumber="4804565",
+        brand="BONI",
+        content="500g"
+    )
+    product = cp.to_product(normalized_name="kipfilet")
+    assert product.product_id == "4804565"
+    assert product.name == "Kipfilet"
+    assert product.brand == "BONI"
+    assert product.normalized_name == "kipfilet"
