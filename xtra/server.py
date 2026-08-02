@@ -5,9 +5,9 @@ from mcp.server import Server
 from mcp.server.models import InitializationOptions
 import mcp.types as types
 import mcp.server.stdio
-from src.client import ColruytClient
-from src.models import Product
-from src.logic import extract_ingredients, resolve_ingredient
+from xtra.client import ColruytClient
+from xtra.models import Product
+from xtra.logic import extract_ingredients, resolve_ingredient
 
 # Initialize server
 server = Server("colruyt-xtra")
@@ -76,13 +76,13 @@ async def handle_call_tool(name: str, arguments: Dict[str, Any]) -> List[types.T
 
     try:
         if name == "get_most_bought_products":
-            place_id = arguments.get("placeId", ColruytClient.DEFAULT_PLACE_ID)
+            place_id = arguments.get("placeId")
             products = await client.get_most_bought_products(place_id)
             return [types.TextContent(type="text", text="\n".join([f"- {p.name} ({p.technicalArticleNumber})" for p in products]))]
 
         elif name == "search_products":
             query = arguments["query"]
-            place_id = arguments.get("placeId", ColruytClient.DEFAULT_PLACE_ID)
+            place_id = arguments.get("placeId")
             products = await client.search_products(query, place_id)
             return [types.TextContent(type="text", text="\n".join([f"- {p.name} ({p.technicalArticleNumber})" for p in products]))]
 
@@ -150,11 +150,12 @@ async def main():
     global client
     session_id = os.environ.get("CLPBFF_SESSION")
     api_key = os.environ.get("X_CG_APIKEY")
+    place_id = os.environ.get("COLRUYT_PLACE_ID")
 
     if not session_id:
         print("Warning: CLPBFF_SESSION environment variable not set.")
     
-    client = ColruytClient(session_id=session_id, api_key=api_key)
+    client = ColruytClient(session_id=session_id, api_key=api_key, place_id=place_id)
 
     async with mcp.server.stdio.stdio_server() as (read_stream, write_stream):
         await server.run(

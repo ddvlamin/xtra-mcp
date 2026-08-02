@@ -1,8 +1,8 @@
 import re
 import os
 from typing import List, Union, Dict
-from src.models import Product
-from src.client import ColruytClient
+from xtra.models import Product
+from xtra.client import ColruytClient
 
 def extract_ingredients(md_content: str) -> List[str]:
     """Extracts ingredients from a markdown recipe."""
