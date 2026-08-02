@@ -1,3 +1,0 @@
-model = "gpt-4o"
-editor = "vim"
-max_tokens = 4096
