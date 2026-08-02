@@ -36,7 +36,7 @@ This plan outlines the implementation of a Python-based Model Context Protocol (
 | Task     | Description                                                                 | Completed | Date |
 | -------- | --------------------------------------------------------------------------- | --------- | ---- |
 | TASK-001 | Update `pyproject.toml` with `httpx`, `pydantic`, and `python-dotenv`.      |           |      |
-| TASK-002 | Create `src/models.py` for API request/response schemas.                    |           |      |
+| TASK-002 | Create `xtra/models.py` for API request/response schemas.                    |           |      |
 | TASK-003 | Create `.env.example` with placeholders for session and API key.            |           |      |
 
 ### Implementation Phase 2: Core API Client
@@ -45,7 +45,7 @@ This plan outlines the implementation of a Python-based Model Context Protocol (
 
 | Task     | Description                                                                 | Completed | Date |
 | -------- | --------------------------------------------------------------------------- | --------- | ---- |
-| TASK-004 | Create `src/client.py` implementing `ColruytClient` class.                  |           |      |
+| TASK-004 | Create `xtra/client.py` implementing `ColruytClient` class.                  |           |      |
 | TASK-005 | Implement `get_most_bought_products` method.                                |           |      |
 | TASK-006 | Implement `search_products` method.                                         |           |      |
 | TASK-007 | Implement `add_items_to_list` method.                                       |           |      |
@@ -56,7 +56,7 @@ This plan outlines the implementation of a Python-based Model Context Protocol (
 
 | Task     | Description                                                                 | Completed | Date |
 | -------- | --------------------------------------------------------------------------- | --------- | ---- |
-| TASK-008 | Create `src/logic.py` for ingredient extraction from Markdown.              |           |      |
+| TASK-008 | Create `xtra/logic.py` for ingredient extraction from Markdown.              |           |      |
 | TASK-009 | Implement logic to clean ingredient strings (remove quantities/units).      |           |      |
 | TASK-010 | Implement the disambiguation logic using "most bought" cross-referencing.   |           |      |
 
@@ -66,7 +66,7 @@ This plan outlines the implementation of a Python-based Model Context Protocol (
 
 | Task     | Description                                                                 | Completed | Date |
 | -------- | --------------------------------------------------------------------------- | --------- | ---- |
-| TASK-011 | Create `src/server.py` and initialize `mcp.Server`.                         |           |      |
+| TASK-011 | Create `xtra/server.py` and initialize `mcp.Server`.                         |           |      |
 | TASK-012 | Register `get_most_bought_products`, `search_products`, `add_items_to_list`.|           |      |
 | TASK-013 | Register `add_recipe_to_list` tool.                                         |           |      |
 | TASK-014 | Implement error handling and authentication validation at startup.          |           |      |
@@ -95,10 +95,10 @@ This plan outlines the implementation of a Python-based Model Context Protocol (
 
 ## 5. Files
 
-- **FILE-001**: `src/server.py` - Entry point and MCP tool registration.
-- **FILE-002**: `src/client.py` - API client for Colruyt Gateway.
-- **FILE-003**: `src/models.py` - Pydantic models for API data.
-- **FILE-004**: `src/logic.py` - Recipe parsing and matching logic.
+- **FILE-001**: `xtra/server.py` - Entry point and MCP tool registration.
+- **FILE-002**: `xtra/client.py` - API client for Colruyt Gateway.
+- **FILE-003**: `xtra/models.py` - Pydantic models for API data.
+- **FILE-004**: `xtra/logic.py` - Recipe parsing and matching logic.
 - **FILE-005**: `pyproject.toml` - Dependency configuration.
 
 ## 6. Testing
