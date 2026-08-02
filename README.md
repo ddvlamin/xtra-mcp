@@ -24,7 +24,7 @@ An MCP server for the Colruyt Xtra app, allowing AI assistants to manage your sh
 ## Running the Server
 
 ```bash
-python src/server.py
+python xtra/server.py
 ```
 
 ## Recipe Integration
