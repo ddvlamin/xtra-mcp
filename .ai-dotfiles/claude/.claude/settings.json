@@ -1,0 +1,5 @@
+{
+  "theme": "dark",
+  "editor": "code",
+  "defaultModel": "claude-3-5-sonnet-latest"
+}

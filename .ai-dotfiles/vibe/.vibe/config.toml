@@ -1,0 +1,7 @@
+model = "devstral-2"
+theme = "dark"
+vim_mode = true
+
+[permissions]
+allow_file_read = true
+allow_shell_execute = false
