@@ -135,6 +135,7 @@ plan/
 .ai-dotfiles/
 .ai-dotfiles/**
 .skills/**
+.prompts/**
 
 # Gemini CLI personal state/secrets
 **/.gemini/oauth_creds.json
