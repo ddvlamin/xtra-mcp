@@ -4,7 +4,7 @@ from typing import List, Optional
 from rapidfuzz import process, fuzz
 from xtra.models import Product
 
-DEFAULT_DB_PATH = os.path.join("resources", "colruyt_mappings.db")
+DEFAULT_DB_PATH = os.path.join("resources", "colruyt_products.db")
 
 class Database:
     def __init__(self, db_path: Optional[str] = None):
