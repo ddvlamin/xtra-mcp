@@ -15,8 +15,7 @@ RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
     && apt-get -y install --no-install-recommends npm libsecret-1-0 sudo stow \
     && echo "vscode ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/vscode
 
-RUN npm install -g npm@latest && \
-    npm install -g @modelcontextprotocol/server-filesystem @modelcontextprotocol/server-github @modelcontextprotocol/server-sequential-thinking
+RUN npm install -g @modelcontextprotocol/server-filesystem @modelcontextprotocol/server-github @modelcontextprotocol/server-sequential-thinking
 
 RUN chown -R vscode:vscode /workspace
 

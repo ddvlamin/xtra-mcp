@@ -20,7 +20,8 @@
                 "github.vscode-pull-request-github",
                 "mermaidchart.vscode-mermaid-chart",
                 "pomdtr.excalidraw-editor",
-                "hashicorp.terraform"
+                "hashicorp.terraform",
+                "qwtel.sqlite-viewer"
             ],
             "settings": {
                 "python.defaultInterpreterPath":"/workspace/.venv/bin/python"
@@ -28,7 +29,10 @@
         }
     },
     "features": {
-        "ghcr.io/devcontainers/features/github-cli:1": {}
+        "ghcr.io/devcontainers/features/github-cli:1": {},
+        "ghcr.io/devcontainers/features/node:1": {
+            "version": "22"
+        }
     },
     "mounts": [
     ],
