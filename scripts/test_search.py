@@ -1,7 +1,7 @@
 import asyncio
 import os
 from dotenv import load_dotenv
-from xtra.client import ColruytClient
+from xtra.colruyt import ColruytClient
 
 # Load environment variables from .env
 load_dotenv()
@@ -28,8 +28,7 @@ async def main():
         else:
             print(f"Found {len(results)} products:")
             for p in results:
-                price_str = f"€{p.price.basicPrice}" if p.price else "N/A"
-                print(f"- {p.name} ({p.technicalArticleNumber}) - {price_str}")
+                print(f"- {p.name} ({p.product_id})")
                 if p.brand:
                     print(f"  Brand: {p.brand}")
     except Exception as e:

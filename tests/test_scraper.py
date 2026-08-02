@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import AsyncMock, patch
-from xtra.scraper import _parse_rti_html, scrape_product_info
+from xtra.colruyt import ColruytClient, _parse_rti_html
 
 def test_parse_rti_html():
     sample_html = """
@@ -31,7 +31,7 @@ def test_parse_rti_html():
     assert parsed["product_description"] == "100% kipfilet"
 
 @pytest.mark.asyncio
-async def test_scrape_product_info_success():
+async def test_get_product_info_success():
     sample_html = """
     <div class="flex flex-col gap-4">
         <h2>Inhoud</h2>
@@ -42,6 +42,8 @@ async def test_scrape_product_info_success():
     mock_response.status_code = 200
     mock_response.text = sample_html
 
+    client = ColruytClient(session_id="dummy", api_key="dummy", place_id="dummy")
+
     with patch("httpx.AsyncClient.get", return_value=mock_response):
-        info = await scrape_product_info("12345")
+        info = await client.get_product_info("12345")
         assert info["content"] == "Netto inhoud: 200g"
