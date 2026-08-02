@@ -12,7 +12,8 @@ from xtra.colruyt import ColruytClient
 from xtra.models import Product
 from xtra.logic import (
     extract_ingredients,
-    resolve_ingredient
+    resolve_ingredient,
+    store_resolved_product
 )
 
 # Initialize server
@@ -60,6 +61,20 @@ async def handle_list_tools() -> List[types.Tool]:
                 },
                 "required": ["recipe_filename"]
             }
+        ),
+        types.Tool(
+            name="store_resolved_product",
+            description="Store a resolved product mapping for a normalized ingredient in the local SQLite database after a user selection.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "ingredient": {"type": "string", "description": "Normalized ingredient string (e.g. from resolve_ingredient)"},
+                    "product_id": {"type": "string", "description": "Selected Colruyt product ID"},
+                    "name": {"type": "string", "description": "Product name"},
+                    "brand": {"type": "string", "description": "Product brand (optional)"}
+                },
+                "required": ["ingredient", "product_id", "name"]
+            }
         )
     ]
 
@@ -77,11 +92,12 @@ async def handle_call_tool(name: str, arguments: Dict[str, Any]) -> List[types.T
         if name == "resolve_ingredient":
             ingredient = arguments["ingredient"]
             most_bought = await client.get_most_bought_products()
-            resolved = await resolve_ingredient(ingredient, client, most_bought)
+            query, resolved = await resolve_ingredient(ingredient, client, most_bought)
 
             if isinstance(resolved, Product):
                 info_lines = [
                     f"Product Resolved:",
+                    f"- Normalized Ingredient: {query}",
                     f"- Name: {resolved.name}",
                     f"- Product ID: {resolved.product_id}",
                     f"- Brand: {resolved.brand or 'N/A'}",
@@ -93,9 +109,9 @@ async def handle_call_tool(name: str, arguments: Dict[str, Any]) -> List[types.T
                 return [types.TextContent(type="text", text="\n".join(info_lines))]
             elif isinstance(resolved, list) and resolved:
                 options = [f"- {p.name} ({p.product_id})" for p in resolved]
-                return [types.TextContent(type="text", text=f"Ambiguous ingredient '{ingredient}'. Options:\n" + "\n".join(options))]
+                return [types.TextContent(type="text", text=f"Ambiguous ingredient '{ingredient}' (normalized: '{query}'). Options:\n" + "\n".join(options))]
             else:
-                return [types.TextContent(type="text", text=f"No product found for '{ingredient}'.")]
+                return [types.TextContent(type="text", text=f"No product found for '{ingredient}' (normalized: '{query}').")]
 
         elif name == "add_items_to_list":
             ids = arguments["product_ids"]
@@ -120,7 +136,7 @@ async def handle_call_tool(name: str, arguments: Dict[str, Any]) -> List[types.T
             ambiguous = []
             
             for ing in ingredients:
-                resolved = await resolve_ingredient(ing, client, most_bought)
+                query, resolved = await resolve_ingredient(ing, client, most_bought)
                 if isinstance(resolved, Product):
                     to_add.append(resolved)
                     results.append(f"✅ {ing} -> {resolved.name}")
@@ -142,6 +158,23 @@ async def handle_call_tool(name: str, arguments: Dict[str, Any]) -> List[types.T
                         response_text += f"  {i+1}. {opt.name} ({opt.product_id})\n"
             
             return [types.TextContent(type="text", text=response_text)]
+
+        elif name == "store_resolved_product":
+            ingredient = arguments.get("normalized_ingredient") or arguments["ingredient"]
+            product_id = arguments["product_id"]
+            name_arg = arguments["name"]
+            brand_arg = arguments.get("brand")
+            stored = await store_resolved_product(
+                ingredient=ingredient,
+                product_id=product_id,
+                name=name_arg,
+                brand=brand_arg,
+                client=client
+            )
+            return [types.TextContent(
+                type="text",
+                text=f"Stored resolved product: '{ingredient}' -> {stored.name} ({stored.product_id})"
+            )]
 
         else:
             return [types.TextContent(type="text", text=f"Unknown tool: {name}")]

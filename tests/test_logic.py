@@ -22,3 +22,24 @@ def test_clean_ingredient():
     assert clean_ingredient("1 rode paprika") == "rode paprika"
     assert clean_ingredient("enkele sperzieboontjes") == "sperzieboontjes"
     assert clean_ingredient("1 kop basmatirijst") == "basmatirijst"
+
+@pytest.mark.asyncio
+async def test_store_resolved_product():
+    from xtra.logic import store_resolved_product
+    from xtra.db import Database
+    db = Database(":memory:")
+    stored = await store_resolved_product(
+        ingredient="rode currypasta",
+        product_id="111222",
+        name="Rode Curry Pasta 200g",
+        brand="BONI",
+        db=db
+    )
+    assert stored.normalized_name == "rode currypasta"
+    assert stored.product_id == "111222"
+    assert stored.name == "Rode Curry Pasta 200g"
+
+    found = db.find_product("rode currypasta")
+    assert found is not None
+    assert found.product_id == "111222"
+

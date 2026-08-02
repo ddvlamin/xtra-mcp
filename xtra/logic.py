@@ -1,5 +1,5 @@
 import re
-from typing import List, Union, Optional
+from typing import List, Union, Optional, Tuple
 from xtra.models import Product
 from xtra.client import SupermarketClient
 from xtra.db import Database
@@ -34,8 +34,10 @@ async def resolve_ingredient(
     client: SupermarketClient,
     most_bought: List[Product],
     db: Optional[Database] = None
-) -> Union[Product, List[Product]]:
-    """Resolves an ingredient string to a Product using database fuzzy matching, search, and most_bought list."""
+) -> Tuple[str, Union[Product, List[Product]]]:
+    """Resolves an ingredient string to a Product using database fuzzy matching, search, and most_bought list.
+    Returns a tuple of (normalized_ingredient, Product | List[Product]).
+    """
     if db is None:
         db = Database()
 
@@ -44,12 +46,12 @@ async def resolve_ingredient(
     # 1. Database fuzzy matching lookup (threshold >= 80)
     fuzzy_match = db.find_product(query, score_threshold=80)
     if fuzzy_match:
-        return fuzzy_match
+        return query, fuzzy_match
 
     # 2. Live search API
     search_results = await client.search_products(query)
     if not search_results:
-        return []
+        return query, []
 
     resolved_product: Optional[Product] = None
 
@@ -62,9 +64,9 @@ async def resolve_ingredient(
         if len(matches) == 1:
             resolved_product = matches[0]
         elif len(matches) > 1:
-            return matches
+            return query, matches
         else:
-            return search_results[:5]
+            return query, search_results[:5]
 
     # 3. Fetch product info via client & store product in DB
     if resolved_product:
@@ -79,6 +81,48 @@ async def resolve_ingredient(
             resolved_product.content = product_info.get("content")
 
         stored = db.store_product(resolved_product)
-        return stored
+        return query, stored
 
-    return []
+    return query, []
+
+async def store_resolved_product(
+    ingredient: str,
+    product_id: str,
+    name: str,
+    brand: Optional[str] = None,
+    client: Optional[SupermarketClient] = None,
+    db: Optional[Database] = None
+) -> Product:
+    """Stores a chosen product resolution into the local SQLite database.
+
+    Args:
+        ingredient: String representing the normalized version of the ingredient.
+        product_id: Selected Colruyt product ID.
+        name: Name of the product.
+        brand: Optional brand name.
+        client: Optional SupermarketClient instance to fetch additional details.
+        db: Optional Database instance.
+    """
+    if db is None:
+        db = Database()
+
+    product = Product(
+        normalized_name=ingredient,
+        product_id=product_id,
+        name=name,
+        brand=brand
+    )
+
+    if client:
+        try:
+            product_info = await client.get_product_info(product_id)
+            product.description = product_info.get("product_description")
+            product.conservation_info = product_info.get("conservation_info")
+            product.usage_info = product_info.get("usage_info")
+            if product_info.get("content"):
+                product.content = product_info.get("content")
+        except Exception:
+            pass
+
+    return db.store_product(product)
+
