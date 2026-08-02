@@ -1,7 +1,7 @@
 import asyncio
 import os
 from dotenv import load_dotenv
-from src.client import ColruytClient
+from xtra.client import ColruytClient
 
 # Load environment variables from .env
 load_dotenv()
@@ -9,13 +9,14 @@ load_dotenv()
 async def main():
     session_id = os.getenv("CLPBFF_SESSION")
     api_key = os.getenv("X_CG_APIKEY")
+    place_id = os.getenv("COLRUYT_PLACE_ID")
 
     if not session_id:
         print("Error: CLPBFF_SESSION not found in environment or .env file.")
         return
 
     print(f"Initializing client with session: {session_id[:8]}...")
-    client = ColruytClient(session_id=session_id, api_key=api_key)
+    client = ColruytClient(session_id=session_id, api_key=api_key, place_id=place_id)
 
     query = "aardbeien"
     print(f"Searching for: '{query}'...")

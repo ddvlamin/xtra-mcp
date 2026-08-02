@@ -1,5 +1,5 @@
 import pytest
-from src.logic import extract_ingredients, clean_ingredient
+from xtra.logic import extract_ingredients, clean_ingredient
 
 def test_extract_ingredients():
     md = """

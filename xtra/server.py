@@ -7,9 +7,9 @@ from mcp.server import Server
 from mcp.server.models import InitializationOptions
 import mcp.types as types
 import mcp.server.stdio
-from src.client import ColruytClient
-from src.models import Product
-from src.logic import extract_ingredients, resolve_ingredient
+from xtra.client import ColruytClient
+from xtra.models import Product
+from xtra.logic import extract_ingredients, resolve_ingredient
 
 # Initialize server
 server = Server("colruyt-xtra")
@@ -82,13 +82,13 @@ async def handle_call_tool(name: str, arguments: Dict[str, Any]) -> List[types.T
 
     try:
         if name == "get_most_bought_products":
-            place_id = arguments.get("placeId", ColruytClient.DEFAULT_PLACE_ID)
+            place_id = arguments.get("placeId")
             products = await client.get_most_bought_products(place_id)
             return [types.TextContent(type="text", text="\n".join([f"- {p.name} ({p.technicalArticleNumber})" for p in products]))]
 
         elif name == "search_products":
             query = arguments["query"]
-            place_id = arguments.get("placeId", ColruytClient.DEFAULT_PLACE_ID)
+            place_id = arguments.get("placeId")
             products = await client.search_products(query, place_id)
             return [types.TextContent(type="text", text="\n".join([f"- {p.name} ({p.technicalArticleNumber})" for p in products]))]
 
@@ -158,15 +158,17 @@ async def main():
     parser = argparse.ArgumentParser(description="Colruyt Xtra MCP Server")
     parser.add_argument("--session-id", "-s", help="Colruyt Xtra session ID (clpbff_session cookie)")
     parser.add_argument("--api-key", "-a", help="Custom x-cg-apikey header value")
+    parser.add_argument("--place-id", "-p", help="Colruyt store ID (placeId)")
     args, unknown = parser.parse_known_args()
 
     session_id = args.session_id or os.environ.get("CLPBFF_SESSION")
     api_key = args.api_key or os.environ.get("X_CG_APIKEY")
+    place_id = args.place_id or os.environ.get("COLRUYT_PLACE_ID")
 
     if not session_id:
         print("Warning: session_id not set via CLI argument or CLPBFF_SESSION environment variable.", file=sys.stderr)
     
-    client = ColruytClient(session_id=session_id, api_key=api_key)
+    client = ColruytClient(session_id=session_id, api_key=api_key, place_id=place_id)
 
     async with mcp.server.stdio.stdio_server() as (read_stream, write_stream):
         await server.run(

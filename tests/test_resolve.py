@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock
-from src.logic import resolve_ingredient
-from src.models import Product
+from xtra.logic import resolve_ingredient
+from xtra.models import Product
 
 @pytest.mark.asyncio
 async def test_resolve_ingredient_unique():
