@@ -27,7 +27,7 @@ async def handle_list_tools() -> List[types.Tool]:
     return [
         types.Tool(
             name="resolve_ingredient",
-            description="Resolve an ingredient string to a Colruyt product using local SQLite fuzzy matching, search API, and most bought history.",
+            description="Resolve an ingredient string to a Colruyt product using local SQLite fuzzy matching, search API, and most bought history. If ambiguous, up to 5 options are returned from the list. The sixth option is 'other' and if chosen, increase offset by 5 on the next call.",
             inputSchema={
                 "type": "object",
                 "properties": {
