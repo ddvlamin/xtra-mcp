@@ -85,3 +85,30 @@ async def test_handle_call_tool_missing_session_id():
         assert "Error: Colruyt client not properly initialized" in result[0].text
     finally:
         server_module.client = orig_client
+
+@pytest.mark.asyncio
+async def test_server_call_resolve_ingredient_ambiguous_numbered_and_other():
+    mock_client = MagicMock()
+    mock_client.session_id = "dummy_session"
+    mock_client.get_most_bought_products = AsyncMock(return_value=[])
+    server_module.client = mock_client
+
+    sample_products = [Product(name=f"Prod {i}", product_id=str(i)) for i in range(1, 8)]
+
+    with patch("xtra.server.resolve_ingredient", new=AsyncMock(return_value=("test_ing", sample_products))):
+        # Default offset = 0
+        result = await server_module.handle_call_tool("resolve_ingredient", {"ingredient": "test_ing"})
+        assert len(result) == 1
+        text = result[0].text
+        assert "1. Prod 1 (1)" in text
+        assert "5. Prod 5 (5)" in text
+        assert "6. Other" in text
+        assert "6. Prod 6" not in text
+
+        # Page 2 (offset = 5)
+        result_pg2 = await server_module.handle_call_tool("resolve_ingredient", {"ingredient": "test_ing", "offset": 5})
+        text_pg2 = result_pg2[0].text
+        assert "1. Prod 6 (6)" in text_pg2
+        assert "2. Prod 7 (7)" in text_pg2
+        assert "Other" not in text_pg2
+

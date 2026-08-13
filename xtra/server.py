@@ -31,7 +31,8 @@ async def handle_list_tools() -> List[types.Tool]:
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "ingredient": {"type": "string", "description": "Ingredient string to resolve"}
+                    "ingredient": {"type": "string", "description": "Ingredient string to resolve"},
+                    "offset": {"type": "integer", "description": "Offset for options pagination (default: 0)"}
                 },
                 "required": ["ingredient"]
             }
@@ -91,6 +92,7 @@ async def handle_call_tool(name: str, arguments: Dict[str, Any]) -> List[types.T
     try:
         if name == "resolve_ingredient":
             ingredient = arguments["ingredient"]
+            offset = arguments.get("offset", 0)
             most_bought = await client.get_most_bought_products()
             query, resolved = await resolve_ingredient(ingredient, client, most_bought)
 
@@ -108,7 +110,11 @@ async def handle_call_tool(name: str, arguments: Dict[str, Any]) -> List[types.T
                 ]
                 return [types.TextContent(type="text", text="\n".join(info_lines))]
             elif isinstance(resolved, list) and resolved:
-                options = [f"- {p.name} ({p.product_id})" for p in resolved]
+                page_size = 5
+                batch = resolved[offset : offset + page_size]
+                options = [f"{i+1}. {p.name} ({p.product_id})" for i, p in enumerate(batch)]
+                if (offset + len(batch)) < len(resolved):
+                    options.append(f"{len(batch)+1}. Other")
                 return [types.TextContent(type="text", text=f"Ambiguous ingredient '{ingredient}' (normalized: '{query}'). Options:\n" + "\n".join(options))]
             else:
                 return [types.TextContent(type="text", text=f"No product found for '{ingredient}' (normalized: '{query}').")]
@@ -154,8 +160,12 @@ async def handle_call_tool(name: str, arguments: Dict[str, Any]) -> List[types.T
                 response_text += "\n\nSome ingredients are ambiguous. Please choose from the following:\n"
                 for ing, options in ambiguous:
                     response_text += f"\nFor '{ing}':\n"
-                    for i, opt in enumerate(options):
+                    page_size = 5
+                    batch = options[:page_size]
+                    for i, opt in enumerate(batch):
                         response_text += f"  {i+1}. {opt.name} ({opt.product_id})\n"
+                    if len(options) > page_size:
+                        response_text += f"  {len(batch)+1}. Other\n"
             
             return [types.TextContent(type="text", text=response_text)]
 

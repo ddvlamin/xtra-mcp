@@ -52,26 +52,20 @@ async def test_resolve_ingredient_unique(memory_db):
     assert saved_db.product_id == "123"
 
 @pytest.mark.asyncio
-async def test_resolve_ingredient_ambiguous_resolved_by_most_bought(memory_db):
+async def test_resolve_ingredient_ambiguous_returns_catalog_options(memory_db):
     client = MagicMock()
     client.search_products = AsyncMock(return_value=[
         Product(name="Kipfilet A", product_id="123"),
         Product(name="Kipfilet B", product_id="456")
     ])
-    client.get_product_info = AsyncMock(return_value={
-        "product_description": "Scraped B",
-        "conservation_info": None,
-        "usage_info": None,
-        "content": None
-    })
     most_bought = [
         Product(name="Kipfilet B", product_id="456")
     ]
 
     query, result = await resolve_ingredient("3 kipfilets", client, most_bought, db=memory_db)
     assert query == "kipfilets"
-    assert isinstance(result, Product)
-    assert result.product_id == "456"
+    assert isinstance(result, list)
+    assert len(result) == 2
 
 @pytest.mark.asyncio
 async def test_resolve_ingredient_ambiguous_unresolved(memory_db):

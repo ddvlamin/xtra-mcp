@@ -58,15 +58,7 @@ async def resolve_ingredient(
     if len(search_results) == 1:
         resolved_product = search_results[0]
     else:
-        # Cross-reference with most_bought
-        mb_ids = {p.product_id for p in most_bought}
-        matches = [p for p in search_results if p.product_id in mb_ids]
-        if len(matches) == 1:
-            resolved_product = matches[0]
-        elif len(matches) > 1:
-            return query, matches
-        else:
-            return query, search_results[:5]
+        return query, search_results
 
     # 3. Fetch product info via client & store product in DB
     if resolved_product:
