@@ -1,47 +1,90 @@
 import re
-from typing import List, Union, Optional, Tuple
-from xtra.models import Product
+from dataclasses import dataclass
+from typing import List, Optional, Union, Tuple
+from xtra.models import Product, ExtractedIngredient
 from xtra.client import SupermarketClient
 from xtra.db import Database
+from xtra.extractor import (
+    IngredientExtractor,
+    LLMIngredientExtractor,
+    BaseIngredientExtractor,
+    ExtractionError
+)
 
-def extract_ingredients(md_content: str) -> List[str]:
-    """Extracts ingredients from a markdown recipe."""
-    match = re.search(r"## 🛒 Ingrediënten\n(.*?)(?:\n##|\Z)", md_content, re.DOTALL)
+@dataclass
+class RecipeResolutionResult:
+    """Encapsulates the outcome of resolving all ingredients in a recipe."""
+    resolved: List[Tuple[ExtractedIngredient, Product]]
+    ambiguous: List[Tuple[ExtractedIngredient, str, List[Product]]]
+    not_found: List[Tuple[ExtractedIngredient, str]]
+
+    @property
+    def is_complete(self) -> bool:
+        return len(self.ambiguous) == 0 and len(self.not_found) == 0
+
+    @property
+    def total_count(self) -> int:
+        return len(self.resolved) + len(self.ambiguous) + len(self.not_found)
+
+    @property
+    def resolved_count(self) -> int:
+        return len(self.resolved)
+
+def format_ingredient_label(item: Union[ExtractedIngredient, dict, str]) -> str:
+    """Formats an ingredient object into a readable label with quantity and unit."""
+    if isinstance(item, ExtractedIngredient):
+        name = item.name
+        qty = item.quantity
+        unit = item.unit
+    elif isinstance(item, dict):
+        name = item.get("name", "")
+        qty = item.get("quantity")
+        unit = item.get("unit")
+    else:
+        return str(item)
+
+    qty_str = ""
+    if qty is not None and unit is not None:
+        qty_str = f" ({qty} {unit})"
+    elif qty is not None:
+        qty_str = f" ({qty})"
+    elif unit is not None:
+        qty_str = f" ({unit})"
+
+    return f"{name}{qty_str}"
+
+def extract_ingredients_section(md_content: str) -> str:
+    """Extracts raw text under the Ingredients/Ingrediënten heading in a recipe."""
+    match = re.search(r"##\s*(?:[^\w\s]+\s*)?(?:Ingrediënten|Ingredients)\s*\n(.*?)(?:\n##|\Z)", md_content, re.DOTALL | re.IGNORECASE)
     if not match:
-        return []
-    
-    ingredients_lines = match.group(1).strip().split("\n")
-    ingredients = []
-    
-    for line in ingredients_lines:
-        if line.startswith("*"):
-            clean_line = re.sub(r"^\*\s+(\*\*.*?\:\*\*\s*)?", "", line).strip()
-            parts = [p.strip() for p in clean_line.split(",")]
-            ingredients.extend(parts)
-            
-    return [i for i in ingredients if i]
+        return ""
+    return match.group(1).strip()
 
-def clean_ingredient(ingredient: str) -> str:
-    """Removes quantities and units from an ingredient string to form a normalized ingredient name."""
-    ingredient = re.sub(r"^[0-9½¼¾\s/]+", "", ingredient).strip()
-    units = ["l", "ml", "g", "kg", "el", "tl", "koffielepels", "dikke koffielepels", "kop", "koppen", "scheutje", "bot", "plant", "enkele"]
-    pattern = r"^\b(" + "|".join(units) + r")\b\s+"
-    ingredient = re.sub(pattern, "", ingredient).strip()
-    return ingredient
+async def extract_ingredients_with_llm(
+    ingredients_text: str,
+    host: Optional[str] = None,
+    model: Optional[str] = None,
+    timeout: Optional[float] = None
+) -> List[ExtractedIngredient]:
+    """Extracts structured ingredient objects using local qwen2.5:3b LLM via IngredientExtractor.
+
+    Raises ExtractionError on connection failure or invalid LLM response.
+    """
+    extractor = IngredientExtractor(host=host, model=model, timeout=timeout)
+    return await extractor.extract(ingredients_text)
 
 async def resolve_ingredient(
     ingredient: str,
     client: SupermarketClient,
-    most_bought: List[Product],
     db: Optional[Database] = None
 ) -> Tuple[str, Union[Product, List[Product]]]:
-    """Resolves an ingredient string to a Product using database fuzzy matching, search, and most_bought list.
+    """Resolves an ingredient string to a Product using database fuzzy matching and search.
     Returns a tuple of (normalized_ingredient, Product | List[Product]).
     """
     if db is None:
         db = Database()
 
-    query = clean_ingredient(ingredient)
+    query = ingredient.strip()
     
     # 1. Database fuzzy matching lookup (threshold >= 80)
     fuzzy_match = db.find_product(query, score_threshold=80)
@@ -117,4 +160,103 @@ async def store_resolved_product(
             pass
 
     return db.store_product(product)
+
+async def resolve_recipe_ingredients(
+    content: str,
+    client: SupermarketClient,
+    db: Optional[Database] = None
+) -> Tuple[Optional[str], Optional[RecipeResolutionResult]]:
+    """Extracts ingredients from recipe markdown and resolves each against Colruyt/DB.
+    Returns (error_message, RecipeResolutionResult).
+    """
+    ingredients_section = extract_ingredients_section(content)
+    if not ingredients_section:
+        return "No '## Ingredients' or '## Ingrediënten' section found in the recipe.", None
+
+    try:
+        extracted_ingredients = await extract_ingredients_with_llm(ingredients_section)
+    except Exception as e:
+        return f"Failed to extract ingredients from recipe: {e}", None
+
+    if not extracted_ingredients:
+        return "Could not extract any ingredients from the recipe.", None
+
+    resolved = []
+    ambiguous = []
+    not_found = []
+
+    for item in extracted_ingredients:
+        ing_obj = item if isinstance(item, ExtractedIngredient) else (
+            ExtractedIngredient(**item) if isinstance(item, dict) else ExtractedIngredient(name=str(item))
+        )
+        query, res = await resolve_ingredient(ing_obj.name, client, db=db)
+        if isinstance(res, Product):
+            resolved.append((ing_obj, res))
+        elif isinstance(res, list) and res:
+            ambiguous.append((ing_obj, query, res))
+        else:
+            not_found.append((ing_obj, query))
+
+    result = RecipeResolutionResult(resolved=resolved, ambiguous=ambiguous, not_found=not_found)
+    return None, result
+
+def format_resolved_products_list(
+    resolved_items: List[Tuple[ExtractedIngredient, Product]]
+) -> str:
+    """Formats resolved products into markdown bullet list items with [productId=...]."""
+    lines = []
+    for ing, prod in resolved_items:
+        label = format_ingredient_label(ing)
+        lines.append(f"- {label} [productId={prod.product_id}]")
+    return "\n".join(lines)
+
+def append_or_update_recipe_section(
+    recipe_content: str,
+    section_title: str,
+    section_body: str
+) -> str:
+    """Appends or cleanly updates a markdown section in recipe content."""
+    pattern = rf"##\s*{re.escape(section_title)}\s*\n.*?(?=\n##|\Z)"
+    new_section = f"## {section_title}\n{section_body.strip()}\n"
+    if re.search(pattern, recipe_content, flags=re.DOTALL):
+        return re.sub(pattern, new_section.strip(), recipe_content, flags=re.DOTALL).rstrip() + "\n"
+    else:
+        trimmed = recipe_content.rstrip()
+        return f"{trimmed}\n\n{new_section}"
+
+def format_resolution_progress(
+    result: RecipeResolutionResult,
+    offset: int = 0
+) -> str:
+    """Formats resolution progress and prompts for ambiguous ingredients."""
+    lines = []
+    for ing, prod in result.resolved:
+        label = format_ingredient_label(ing)
+        lines.append(f"✅ {label} -> {prod.name} [productId={prod.product_id}]")
+    for ing, _, _ in result.ambiguous:
+        label = format_ingredient_label(ing)
+        lines.append(f"❓ {label} (Ambiguous)")
+    for ing, _ in result.not_found:
+        label = format_ingredient_label(ing)
+        lines.append(f"❌ {label} (Not found)")
+
+    if result.is_complete:
+        return f"Recipe ingredient resolution complete ({result.total_count}/{result.total_count} items resolved):\n" + "\n".join(lines)
+
+    first_ing, first_query, first_options = result.ambiguous[0] if result.ambiguous else (None, None, [])
+    report = f"Recipe resolution progress ({result.resolved_count}/{result.total_count} resolved, {len(result.ambiguous)} ambiguous):\n" + "\n".join(lines)
+
+    if first_ing and first_options:
+        first_label = format_ingredient_label(first_ing)
+        report += f"\n\nPlease choose an option for ambiguous ingredient (1 of {len(result.ambiguous)}): '{first_label}' (query: '{first_query}'):\n"
+        page_size = 5
+        batch = first_options[offset : offset + page_size]
+        for i, opt in enumerate(batch):
+            brand_str = f" [{opt.brand}]" if opt.brand else ""
+            report += f"  {i+1}. {opt.name}{brand_str} ({opt.product_id})\n"
+        if (offset + len(batch)) < len(first_options):
+            report += f"  {len(batch)+1}. Other\n"
+
+    return report
+
 

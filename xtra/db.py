@@ -1,7 +1,7 @@
 import os
 import sqlite3
 from typing import List, Optional
-from rapidfuzz import process, fuzz
+from rapidfuzz import process, fuzz, utils
 from xtra.models import Product
 
 DEFAULT_DB_PATH = os.path.join("resources", "colruyt_products.db")
@@ -39,9 +39,14 @@ class Database:
                 conservation_info TEXT,
                 usage_info TEXT,
                 content TEXT,
+                top_category_name TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
         """)
+        cursor.execute("PRAGMA table_info(products)")
+        columns = [col[1] for col in cursor.fetchall()]
+        if "top_category_name" not in columns:
+            cursor.execute("ALTER TABLE products ADD COLUMN top_category_name TEXT")
         conn.commit()
         if self.db_path != ":memory:":
             conn.close()
@@ -62,8 +67,9 @@ class Database:
         cursor.execute("""
             INSERT INTO products (
                 normalized_name, product_id, product_name, product_brand,
-                product_description, conservation_info, usage_info, content
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                product_description, conservation_info, usage_info, content,
+                top_category_name
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(normalized_name) DO UPDATE SET
                 product_id = excluded.product_id,
                 product_name = excluded.product_name,
@@ -72,6 +78,7 @@ class Database:
                 conservation_info = excluded.conservation_info,
                 usage_info = excluded.usage_info,
                 content = excluded.content,
+                top_category_name = excluded.top_category_name,
                 created_at = CURRENT_TIMESTAMP
         """, (
             product.normalized_name,
@@ -81,7 +88,8 @@ class Database:
             product.description,
             product.conservation_info,
             product.usage_info,
-            product.content
+            product.content,
+            product.top_category_name
         ))
         conn.commit()
         if self.db_path != ":memory:":
@@ -98,6 +106,36 @@ class Database:
         if self.db_path != ":memory:":
             conn.close()
         return result
+
+    def delete_product(self, normalized_name: Optional[str] = None, product_id: Optional[str] = None) -> int:
+        """Deletes product(s) matching normalized_name or product_id.
+        Returns the number of deleted rows.
+        """
+        if not normalized_name and not product_id:
+            raise ValueError("Either normalized_name or product_id must be provided.")
+
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        if normalized_name and product_id:
+            cursor.execute(
+                "DELETE FROM products WHERE normalized_name = ? AND product_id = ?",
+                (normalized_name, product_id)
+            )
+        elif normalized_name:
+            cursor.execute(
+                "DELETE FROM products WHERE normalized_name = ?",
+                (normalized_name,)
+            )
+        else:
+            cursor.execute(
+                "DELETE FROM products WHERE product_id = ?",
+                (product_id,)
+            )
+        deleted_count = cursor.rowcount
+        conn.commit()
+        if self.db_path != ":memory:":
+            conn.close()
+        return deleted_count
 
     def get_all_products(self) -> List[Product]:
         conn = self.get_connection()
@@ -117,7 +155,7 @@ class Database:
         mapping_dict = {p.normalized_name: p for p in products if p.normalized_name}
         choices = list(mapping_dict.keys())
         
-        result = process.extractOne(query, choices, scorer=fuzz.token_sort_ratio)
+        result = process.extractOne(query, choices, scorer=fuzz.token_sort_ratio, processor=utils.default_process)
         if result:
             matched_key, score, _ = result
             if score >= score_threshold:
@@ -135,5 +173,6 @@ class Database:
             conservation_info=row_dict.get("conservation_info"),
             usage_info=row_dict.get("usage_info"),
             content=row_dict.get("content"),
+            top_category_name=row_dict.get("top_category_name"),
             created_at=str(row_dict["created_at"]) if row_dict.get("created_at") else None
         )

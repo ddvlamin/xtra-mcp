@@ -5,6 +5,8 @@ from datetime import datetime
 from typing import List, Optional, Dict
 from pydantic import BaseModel, Field, ConfigDict
 from bs4 import BeautifulSoup
+from dotenv import load_dotenv
+load_dotenv(override=True)
 from xtra.models import Product
 from xtra.client import SupermarketClient
 
@@ -26,6 +28,7 @@ class ColruytProduct(BaseModel):
     price: Optional[Price] = None
     longName: Optional[str] = Field(None, alias="LongName")
     gtin: Optional[List[str]] = Field(None, alias="GTIN")
+    topCategoryName: Optional[str] = None
 
     def to_product(self, normalized_name: Optional[str] = None) -> Product:
         """Converts Colruyt-specific API response object into unified internal Product domain model."""
@@ -35,7 +38,8 @@ class ColruytProduct(BaseModel):
             name=self.name,
             brand=self.brand,
             content=self.content,
-            gtin=self.gtin
+            gtin=self.gtin,
+            top_category_name=self.topCategoryName
         )
 
 class ProductData(BaseModel):
@@ -59,8 +63,14 @@ class ColruytClient(SupermarketClient):
     SEARCH_URL = "https://apip.colruyt.be/gateway/emec.colruyt.protected.bffsvc/cg/nl/api/product-search-prs"
     RTI_BASE_URL = "https://rti.colruytgroup.com/nl/product-info"
 
-    def __init__(self, session_id: str, api_key: Optional[str] = None, place_id: Optional[str] = None):
-        self.session_id = session_id
+    def __init__(self, session_id: Optional[str] = None, api_key: Optional[str] = None, place_id: Optional[str] = None):
+        # Determine session ID from argument or environment variable
+        self.session_id = session_id or os.environ.get("CLPBFF_SESSION")
+        if not self.session_id:
+            raise ValueError(
+                "Colruyt session ID must be provided either via the session_id parameter "
+                "or the CLPBFF_SESSION environment variable."
+            )
         
         # Determine API key from argument or environment variables
         self.api_key = api_key or os.environ.get("X_CG_APIKEY") or os.environ.get("COLRUYT_API_KEY")
@@ -80,13 +90,19 @@ class ColruytClient(SupermarketClient):
 
         self.headers = {
             "x-cg-apikey": self.api_key,
-            "Accept": "application/json",
-            "Content-Type": "application/json",
-            "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36",
+            "Accept": "*/*",
+            "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36",
             "Origin": "https://www.colruyt.be",
             "Referer": "https://www.colruyt.be/"
         }
         self.cookies = {"clpbff_session": self.session_id}
+        if os.environ.get("COLRUYT_COOKIE"):
+            for c in os.environ.get("COLRUYT_COOKIE", "").split(";"):
+                if "=" in c:
+                    k, v = c.strip().split("=", 1)
+                    self.cookies[k] = v
+        if os.environ.get("REESE84"):
+            self.cookies["reese84"] = os.environ.get("REESE84")
 
     async def get_most_bought_products(self, place_id: Optional[str] = None) -> List[Product]:
         url = f"{self.BASE_URL}/most-bought-products"

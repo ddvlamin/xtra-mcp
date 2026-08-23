@@ -17,9 +17,8 @@ async def test_resolve_ingredient_from_db(memory_db):
     ))
 
     client = MagicMock()
-    most_bought = []
 
-    query, result = await resolve_ingredient("3 kipfilets", client, most_bought, db=memory_db)
+    query, result = await resolve_ingredient("kipfilets", client, db=memory_db)
     assert query == "kipfilets"
     assert isinstance(result, Product)
     assert result.product_id == "999"
@@ -38,9 +37,8 @@ async def test_resolve_ingredient_unique(memory_db):
         "usage_info": None,
         "content": "500g"
     })
-    most_bought = []
 
-    query, result = await resolve_ingredient("3 kipfilets", client, most_bought, db=memory_db)
+    query, result = await resolve_ingredient("kipfilets", client, db=memory_db)
     assert query == "kipfilets"
     assert isinstance(result, Product)
     assert result.product_id == "123"
@@ -58,11 +56,8 @@ async def test_resolve_ingredient_ambiguous_returns_catalog_options(memory_db):
         Product(name="Kipfilet A", product_id="123"),
         Product(name="Kipfilet B", product_id="456")
     ])
-    most_bought = [
-        Product(name="Kipfilet B", product_id="456")
-    ]
 
-    query, result = await resolve_ingredient("3 kipfilets", client, most_bought, db=memory_db)
+    query, result = await resolve_ingredient("kipfilets", client, db=memory_db)
     assert query == "kipfilets"
     assert isinstance(result, list)
     assert len(result) == 2
@@ -74,9 +69,8 @@ async def test_resolve_ingredient_ambiguous_unresolved(memory_db):
         Product(name="Kipfilet A", product_id="123"),
         Product(name="Kipfilet B", product_id="456")
     ])
-    most_bought = []
 
-    query, result = await resolve_ingredient("3 kipfilets", client, most_bought, db=memory_db)
+    query, result = await resolve_ingredient("kipfilets", client, db=memory_db)
     assert query == "kipfilets"
     assert isinstance(result, list)
     assert len(result) == 2

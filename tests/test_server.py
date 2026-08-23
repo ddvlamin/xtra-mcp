@@ -12,6 +12,7 @@ async def test_server_list_tools():
 
     # Verify exposed tools
     assert "resolve_ingredient" in tool_names
+    assert "resolve_recipe" in tool_names
     assert "add_items_to_list" in tool_names
     assert "add_recipe_to_list" in tool_names
     assert "store_resolved_product" in tool_names
@@ -79,10 +80,11 @@ async def test_handle_call_tool_missing_session_id():
     orig_client = server_module.client
     try:
         server_module.client = None
-        result = await server_module.handle_call_tool("add_items_to_list", {"product_ids": ["123"]})
-        assert len(result) == 1
-        assert isinstance(result[0], types.TextContent)
-        assert "Error: Colruyt client not properly initialized" in result[0].text
+        with patch.dict("os.environ", {"CLPBFF_SESSION": ""}, clear=False):
+            result = await server_module.handle_call_tool("add_items_to_list", {"product_ids": ["123"]})
+            assert len(result) == 1
+            assert isinstance(result[0], types.TextContent)
+            assert "Error: Colruyt client not properly initialized" in result[0].text
     finally:
         server_module.client = orig_client
 

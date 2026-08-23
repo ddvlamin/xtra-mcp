@@ -7,13 +7,19 @@ from mcp.server import Server, NotificationOptions
 from mcp.server.models import InitializationOptions
 import mcp.types as types
 import mcp.server.stdio
+from dotenv import load_dotenv
+load_dotenv(override=True)
 from xtra.client import SupermarketClient
 from xtra.colruyt import ColruytClient
 from xtra.models import Product
 from xtra.logic import (
-    extract_ingredients,
     resolve_ingredient,
-    store_resolved_product
+    store_resolved_product,
+    resolve_recipe_ingredients,
+    format_ingredient_label,
+    format_resolved_products_list,
+    append_or_update_recipe_section,
+    format_resolution_progress
 )
 
 # Initialize server
@@ -22,12 +28,23 @@ server = Server("colruyt-xtra")
 # Global client (initialized at startup)
 client: Optional[SupermarketClient] = None
 
+def get_client() -> Optional[ColruytClient]:
+    global client
+    if client is not None:
+        return client
+    session_id = os.environ.get("CLPBFF_SESSION")
+    api_key = os.environ.get("X_CG_APIKEY")
+    place_id = os.environ.get("COLRUYT_PLACE_ID")
+    if not session_id:
+        return None
+    return ColruytClient(session_id=session_id, api_key=api_key, place_id=place_id)
+
 @server.list_tools()
 async def handle_list_tools() -> List[types.Tool]:
     return [
         types.Tool(
             name="resolve_ingredient",
-            description="Resolve an ingredient string to a Colruyt product using local SQLite fuzzy matching, search API, and most bought history. If ambiguous, up to 5 options are returned from the list. The sixth option is 'other' and if chosen, increase offset by 5 on the next call.",
+            description="Resolve an ingredient string to its corresponding supermarket product id using local SQLite fuzzy matching and search API. Use this tool whenever the user asks to resolve, search, or find a product ID for a single ingredient or item. If ambiguous, up to 5 options are returned from the list. The sixth option is 'other' and if chosen, increase offset by 5 on the next call.",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -39,7 +56,7 @@ async def handle_list_tools() -> List[types.Tool]:
         ),
         types.Tool(
             name="add_items_to_list",
-            description="Add products to the user's Colruyt shopping list.",
+            description="Add products to the user's supermarket shopping list. Use this tool whenever the user asks to add product IDs or items directly to their shopping list.",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -54,18 +71,57 @@ async def handle_list_tools() -> List[types.Tool]:
         ),
         types.Tool(
             name="add_recipe_to_list",
-            description="Parse a recipe markdown file and add ingredients to the shopping list.",
+            description="Parse a recipe markdown file and add ingredients to the shopping list. Use this tool whenever the user asks to add all ingredients from a recipe file to their shopping list.",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "recipe_filename": {"type": "string", "description": "Filename in recipes/ folder"}
+                    "recipe_filename": {"type": "string", "description": "Full path to the recipe markdown file"}
+                },
+                "required": ["recipe_filename"]
+            }
+        ),
+        types.Tool(
+            name="resolve_recipe",
+            description="Resolve all ingredients in a recipe using LLM extraction and product id resolution. Use this tool whenever the user asks to resolve, check, or look up products for all ingredients in a recipe without modifying the file. Prompts for one ambiguous ingredient at a time.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "recipe_filename": {
+                        "type": "string",
+                        "description": "Full path to the recipe markdown file"
+                    },
+                    "recipe_content": {
+                        "type": "string",
+                        "description": "Direct markdown content of the recipe (optional if recipe_filename is provided)"
+                    },
+                    "offset": {
+                        "type": "integer",
+                        "description": "Pagination offset if user chooses 'Other' for the current ambiguous ingredient (default: 0)"
+                    }
+                }
+            }
+        ),
+        types.Tool(
+            name="annotate_recipe_with_productids",
+            description="Extract and resolve all ingredients in a recipe markdown file to product ids and append or update a '## Resolved Products' section at the end of the file (format: '- <ingredient> [productId=<id>]'). Use this tool whenever the user asks to annotate, add, or append resolved product IDs to a recipe markdown file. Only writes to the file when 100% of ingredients are resolved; if ingredients are ambiguous or unmapped, returns progress and options to prompt the user.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "recipe_filename": {
+                        "type": "string",
+                        "description": "Full path to the recipe markdown file"
+                    },
+                    "offset": {
+                        "type": "integer",
+                        "description": "Pagination offset if user chooses 'Other' for the current ambiguous ingredient (default: 0)"
+                    }
                 },
                 "required": ["recipe_filename"]
             }
         ),
         types.Tool(
             name="store_resolved_product",
-            description="Store a resolved product mapping for a normalized ingredient in the local SQLite database after a user selection.",
+            description="Store a resolved product mapping for a normalized ingredient in the local SQLite database after a user selection. Use this tool whenever the user asks to store, save, remember, or map a product selection for an ingredient.",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -81,7 +137,7 @@ async def handle_list_tools() -> List[types.Tool]:
 
 @server.call_tool()
 async def handle_call_tool(name: str, arguments: Dict[str, Any]) -> List[types.TextContent]:
-    global client
+    client = get_client()
     if not client or not client.session_id:
         return [types.TextContent(
             type="text",
@@ -93,8 +149,7 @@ async def handle_call_tool(name: str, arguments: Dict[str, Any]) -> List[types.T
         if name == "resolve_ingredient":
             ingredient = arguments["ingredient"]
             offset = arguments.get("offset", 0)
-            most_bought = await client.get_most_bought_products()
-            query, resolved = await resolve_ingredient(ingredient, client, most_bought)
+            query, resolved = await resolve_ingredient(ingredient, client)
 
             if isinstance(resolved, Product):
                 info_lines = [
@@ -126,48 +181,95 @@ async def handle_call_tool(name: str, arguments: Dict[str, Any]) -> List[types.T
             return [types.TextContent(type="text", text=f"Added {len(ids)} items. Current list has {len(updated_list)} items.")]
 
         elif name == "add_recipe_to_list":
-            filename = arguments["recipe_filename"]
-            path = os.path.join("recipes", filename)
+            path = arguments["recipe_filename"]
             if not os.path.exists(path):
-                return [types.TextContent(type="text", text=f"Error: File {path} not found.")]
+                return [types.TextContent(type="text", text=f"Error: File '{path}' not found.")]
 
-            with open(path, "r") as f:
+            with open(path, "r", encoding="utf-8") as f:
                 content = f.read()
 
-            ingredients = extract_ingredients(content)
-            most_bought = await client.get_most_bought_products()
-            
-            results = []
-            to_add = []
-            ambiguous = []
-            
-            for ing in ingredients:
-                query, resolved = await resolve_ingredient(ing, client, most_bought)
-                if isinstance(resolved, Product):
-                    to_add.append(resolved)
-                    results.append(f"✅ {ing} -> {resolved.name}")
-                elif isinstance(resolved, list) and resolved:
-                    ambiguous.append((ing, resolved))
-                    results.append(f"❓ {ing} (Ambiguous)")
-                else:
-                    results.append(f"❌ {ing} (Not found)")
+            error, result = await resolve_recipe_ingredients(content, client)
+            if error or result is None:
+                return [types.TextContent(type="text", text=f"Error: {error}")]
 
+            to_add = [prod for _, prod in result.resolved]
             if to_add:
                 await client.add_items_to_list(to_add)
-            
-            response_text = "Recipe processing results:\n" + "\n".join(results)
-            if ambiguous:
+
+            results_lines = []
+            for ing, prod in result.resolved:
+                results_lines.append(f"✅ {format_ingredient_label(ing)} -> {prod.name}")
+            for ing, _, _ in result.ambiguous:
+                results_lines.append(f"❓ {format_ingredient_label(ing)} (Ambiguous)")
+            for ing, _ in result.not_found:
+                results_lines.append(f"❌ {format_ingredient_label(ing)} (Not found)")
+
+            response_text = "Recipe processing results:\n" + "\n".join(results_lines)
+            if result.ambiguous:
                 response_text += "\n\nSome ingredients are ambiguous. Please choose from the following:\n"
-                for ing, options in ambiguous:
-                    response_text += f"\nFor '{ing}':\n"
+                for ing, _, options in result.ambiguous:
+                    label = format_ingredient_label(ing)
+                    response_text += f"\nFor '{label}':\n"
                     page_size = 5
                     batch = options[:page_size]
                     for i, opt in enumerate(batch):
                         response_text += f"  {i+1}. {opt.name} ({opt.product_id})\n"
                     if len(options) > page_size:
                         response_text += f"  {len(batch)+1}. Other\n"
-            
+
             return [types.TextContent(type="text", text=response_text)]
+
+        elif name == "resolve_recipe":
+            content = arguments.get("recipe_content")
+            filename = arguments.get("recipe_filename")
+            offset = arguments.get("offset", 0)
+
+            if not content and filename:
+                if not os.path.exists(filename):
+                    return [types.TextContent(type="text", text=f"Error: Recipe file '{filename}' not found.")]
+                with open(filename, "r", encoding="utf-8") as f:
+                    content = f.read()
+
+            if not content:
+                return [types.TextContent(type="text", text="Error: Either recipe_filename or recipe_content must be provided.")]
+
+            error, result = await resolve_recipe_ingredients(content, client)
+            if error or result is None:
+                return [types.TextContent(type="text", text=f"Error: {error}")]
+
+            return [types.TextContent(type="text", text=format_resolution_progress(result, offset))]
+
+        elif name == "annotate_recipe_with_productids":
+            filename = arguments["recipe_filename"]
+            offset = arguments.get("offset", 0)
+
+            if not os.path.exists(filename):
+                return [types.TextContent(type="text", text=f"Error: Recipe file '{filename}' not found.")]
+
+            with open(filename, "r", encoding="utf-8") as f:
+                content = f.read()
+
+            error, result = await resolve_recipe_ingredients(content, client)
+            if error or result is None:
+                return [types.TextContent(type="text", text=f"Error: {error}")]
+
+            if not result.is_complete:
+                progress_text = format_resolution_progress(result, offset)
+                return [types.TextContent(
+                    type="text",
+                    text=f"Cannot annotate recipe: not all ingredients are resolved ({result.resolved_count}/{result.total_count} resolved).\n\n{progress_text}"
+                )]
+
+            products_list_md = format_resolved_products_list(result.resolved)
+            updated_content = append_or_update_recipe_section(content, "Resolved Products", products_list_md)
+
+            with open(filename, "w", encoding="utf-8") as f:
+                f.write(updated_content)
+
+            return [types.TextContent(
+                type="text",
+                text=f"Successfully annotated recipe '{filename}' with {len(result.resolved)} resolved products in '## Resolved Products' section:\n\n{products_list_md}"
+            )]
 
         elif name == "store_resolved_product":
             ingredient = arguments.get("normalized_ingredient") or arguments["ingredient"]
