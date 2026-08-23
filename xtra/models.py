@@ -14,12 +14,8 @@ class Product(BaseModel):
     usage_info: Optional[str] = None
     content: Optional[str] = None
     gtin: Optional[List[str]] = None
-    top_category_name: Optional[str] = Field(None, alias="topCategoryName")
+    top_category_name: Optional[str] = None
     created_at: Optional[str] = None
-
-    @property
-    def topCategoryName(self) -> Optional[str]:
-        return self.top_category_name
 
 class ExtractedIngredient(BaseModel):
     """Structured ingredient parsed from recipe text."""

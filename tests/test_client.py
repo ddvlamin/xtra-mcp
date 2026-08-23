@@ -71,6 +71,7 @@ def test_colruyt_product_to_product_transformation():
     assert product.name == "Kipfilet"
     assert product.brand == "BONI"
     assert product.query == "kipfilet"
+    assert product.top_category_name == "Bereidingen/Charcuterie/Vis/Veggie"
 
 def test_colruyt_product_from_json_dict_with_top_category_name():
     payload = {
@@ -80,3 +81,4 @@ def test_colruyt_product_from_json_dict_with_top_category_name():
     }
     cp = ColruytProduct(**payload)
     assert cp.topCategoryName == "Brood/Ontbijt"
+    assert cp.to_product().top_category_name == "Brood/Ontbijt"

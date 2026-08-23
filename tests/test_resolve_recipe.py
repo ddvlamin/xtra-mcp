@@ -50,6 +50,7 @@ async def test_extract_ingredients_with_llm_raises_on_error():
 
 @pytest.mark.asyncio
 async def test_server_call_resolve_recipe_tool():
+    import json
     mock_client = MagicMock()
     mock_client.session_id = "dummy_session"
     mock_client.get_most_bought_products = AsyncMock(return_value=[])
@@ -76,11 +77,15 @@ async def test_server_call_resolve_recipe_tool():
             {"recipe_content": recipe_md}
         )
         assert len(result) == 1
-        assert "Recipe ingredient resolution complete (1/1 items resolved):" in result[0].text
-        assert "✅ bloem (200 g) -> Tarwebloem [productId=12345]" in result[0].text
+        data = json.loads(result[0].text)
+        assert data["status"] == "complete"
+        assert data["total_count"] == 1
+        assert data["resolved_count"] == 1
+        assert data["resolved"][0]["product"]["product_id"] == "12345"
 
 @pytest.mark.asyncio
 async def test_server_call_resolve_recipe_with_filepath(tmp_path):
+    import json
     mock_client = MagicMock()
     mock_client.session_id = "dummy_session"
     mock_client.get_most_bought_products = AsyncMock(return_value=[])
@@ -108,11 +113,15 @@ async def test_server_call_resolve_recipe_with_filepath(tmp_path):
             {"recipe_filename": str(recipe_file.resolve())}
         )
         assert len(result) == 1
-        assert "Recipe ingredient resolution complete (1/1 items resolved):" in result[0].text
-        assert "✅ bloem (200 g) -> Tarwebloem [productId=12345]" in result[0].text
+        data = json.loads(result[0].text)
+        assert data["status"] == "complete"
+        assert data["total_count"] == 1
+        assert data["resolved_count"] == 1
+        assert data["resolved"][0]["product"]["product_id"] == "12345"
 
 @pytest.mark.asyncio
 async def test_server_call_resolve_recipe_ambiguous_one_at_a_time():
+    import json
     mock_client = MagicMock()
     mock_client.session_id = "dummy_session"
     server_module.client = mock_client
@@ -153,20 +162,18 @@ async def test_server_call_resolve_recipe_ambiguous_one_at_a_time():
             {"recipe_content": recipe_md}
         )
         assert len(result) == 1
-        text = result[0].text
-        assert "Recipe resolution progress (1/3 resolved, 2 ambiguous):" in text
-        assert "✅ bloem (200 g) -> Tarwebloem [productId=12345]" in text
-        assert "❓ melk (100 ml) (Ambiguous)" in text
-        assert "❓ suiker (50 g) (Ambiguous)" in text
-        # Focus on first ambiguous only
-        assert "Please choose an option for ambiguous ingredient (1 of 2): 'melk (100 ml)' (query: 'melk'):" in text
-        assert "1. Volle melk [Campina] (111)" in text
-        assert "2. Halfvolle melk [BONI] (222)" in text
-        # Make sure second ambiguous ingredient options are NOT dumped yet
-        assert "Witte suiker" not in text
+        data = json.loads(result[0].text)
+        assert data["status"] == "incomplete"
+        assert data["total_count"] == 3
+        assert data["resolved_count"] == 1
+        assert data["ambiguous_count"] == 2
+        assert data["ambiguous"][0]["ingredient"]["name"] == "melk"
+        assert len(data["ambiguous"][0]["options"]) == 2
+        assert data["ambiguous"][0]["options"][0]["product_id"] == "111"
 
 @pytest.mark.asyncio
 async def test_server_call_resolve_recipe_file_not_found():
+    import json
     mock_client = MagicMock()
     mock_client.session_id = "dummy_session"
     server_module.client = mock_client
@@ -176,5 +183,7 @@ async def test_server_call_resolve_recipe_file_not_found():
         {"recipe_filename": "/nonexistent/path/recipe.md"}
     )
     assert len(result) == 1
-    assert "Error: Recipe file '/nonexistent/path/recipe.md' not found." in result[0].text
+    data = json.loads(result[0].text)
+    assert data["status"] == "error"
+    assert "not found" in data["error"]
 

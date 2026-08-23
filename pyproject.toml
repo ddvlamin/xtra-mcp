@@ -21,6 +21,9 @@ dev = [
     "ipykernel"
 ]
 
+[tool.setuptools.packages.find]
+include = ["xtra*"]
+
 [tool.pytest.ini_options]
 pythonpath = ["."]
 

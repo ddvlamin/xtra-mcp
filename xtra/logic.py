@@ -79,7 +79,7 @@ async def resolve_ingredient(
     db: Optional[Database] = None
 ) -> Tuple[str, Union[Product, List[Product]]]:
     """Resolves an ingredient string to a Product using database fuzzy matching and search.
-    Returns a tuple of (normalized_ingredient, Product | List[Product]).
+    Returns a tuple of (query, Product | List[Product]).
     """
     if db is None:
         db = Database()
@@ -224,9 +224,32 @@ def append_or_update_recipe_section(
         trimmed = recipe_content.rstrip()
         return f"{trimmed}\n\n{new_section}"
 
+def format_ambiguous_options_markdown(
+    ingredient: str,
+    query: str,
+    options: List[Any],
+    has_more: bool = False,
+    next_offset: Optional[int] = None
+) -> str:
+    """Formats ambiguous options into a numbered markdown list with category and Next page option."""
+    lines = [f"Ambiguous ingredient '{ingredient}' (query: '{query}'). Options:"]
+    for i, opt in enumerate(options, 1):
+        name = opt.get("name") if isinstance(opt, dict) else opt.name
+        brand = opt.get("brand") if isinstance(opt, dict) else opt.brand
+        pid = opt.get("product_id") if isinstance(opt, dict) else opt.product_id
+        top_cat = opt.get("top_category_name") if isinstance(opt, dict) else getattr(opt, "top_category_name", None)
+        brand_str = f" [{brand}]" if brand else ""
+        cat_str = f" - {top_cat}" if top_cat else ""
+        lines.append(f"{i}. {name}{brand_str} ({pid}){cat_str}")
+    if has_more:
+        next_hint = f" (offset {next_offset})" if next_offset is not None else ""
+        lines.append(f"{len(options) + 1}. Next page{next_hint} (see more options)")
+    return "\n".join(lines)
+
 def format_resolution_progress(
     result: RecipeResolutionResult,
-    offset: int = 0
+    offset: int = 0,
+    limit: int = 5
 ) -> str:
     """Formats resolution progress and prompts for ambiguous ingredients."""
     lines = []
@@ -249,13 +272,15 @@ def format_resolution_progress(
     if first_ing and first_options:
         first_label = format_ingredient_label(first_ing)
         report += f"\n\nPlease choose an option for ambiguous ingredient (1 of {len(result.ambiguous)}): '{first_label}' (query: '{first_query}'):\n"
-        page_size = 5
-        batch = first_options[offset : offset + page_size]
+        batch = first_options[offset : offset + limit]
         for i, opt in enumerate(batch):
             brand_str = f" [{opt.brand}]" if opt.brand else ""
-            report += f"  {i+1}. {opt.name}{brand_str} ({opt.product_id})\n"
+            top_cat = getattr(opt, "top_category_name", None)
+            cat_str = f" - {top_cat}" if top_cat else ""
+            report += f"  {i+1}. {opt.name}{brand_str} ({opt.product_id}){cat_str}\n"
         if (offset + len(batch)) < len(first_options):
-            report += f"  {len(batch)+1}. Other\n"
+            next_off = offset + limit
+            report += f"  {len(batch)+1}. Next page (load offset {next_off} for more options)\n"
 
     return report
 

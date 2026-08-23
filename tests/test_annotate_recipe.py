@@ -1,3 +1,4 @@
+import json
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 import xtra.server as server_module
@@ -38,9 +39,10 @@ async def test_annotate_recipe_success(tmp_path):
         )
 
         assert len(result) == 1
-        assert "Successfully annotated recipe" in result[0].text
-        assert "## Resolved Products" in result[0].text
-        assert "- bloem (200 g) [productId=12345]" in result[0].text
+        data = json.loads(result[0].text)
+        assert data["status"] == "annotated"
+        assert data["resolved_count"] == 1
+        assert data["resolved"][0]["product"]["product_id"] == "12345"
 
         # Verify file content on disk
         updated_content = recipe_file.read_text()
@@ -75,7 +77,8 @@ async def test_annotate_recipe_replaces_existing_section(tmp_path):
         )
 
         assert len(result) == 1
-        assert "Successfully annotated recipe" in result[0].text
+        data = json.loads(result[0].text)
+        assert data["status"] == "annotated"
 
         updated_content = recipe_file.read_text()
         assert "old item" not in updated_content
@@ -120,9 +123,12 @@ async def test_annotate_recipe_does_not_write_when_ambiguous(tmp_path):
         )
 
         assert len(result) == 1
-        assert "Cannot annotate recipe: not all ingredients are resolved" in result[0].text
-        assert "Please choose an option for ambiguous ingredient" in result[0].text
-        assert "1. Volle melk [Campina] (111)" in result[0].text
+        data = json.loads(result[0].text)
+        assert data["status"] == "incomplete"
+        assert data["resolved_count"] == 1
+        assert data["ambiguous_count"] == 1
+        assert data["ambiguous"][0]["query"] == "melk"
+        assert len(data["ambiguous"][0]["options"]) == 2
 
         # Verify file on disk is UNTOUCHED
         assert recipe_file.read_text() == initial_content
@@ -138,4 +144,6 @@ async def test_annotate_recipe_file_not_found():
         {"recipe_filename": "/nonexistent/path/recipe.md"}
     )
     assert len(result) == 1
-    assert "Error: Recipe file '/nonexistent/path/recipe.md' not found." in result[0].text
+    data = json.loads(result[0].text)
+    assert data["status"] == "error"
+    assert "not found" in data["error"]

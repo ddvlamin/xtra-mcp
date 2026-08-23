@@ -1,13 +1,11 @@
 import os
 import sys
 import argparse
-import asyncio
 from typing import List, Optional, Dict, Any
-from mcp.server import Server, NotificationOptions
-from mcp.server.models import InitializationOptions
+from mcp.server.fastmcp import FastMCP
 import mcp.types as types
-import mcp.server.stdio
 from dotenv import load_dotenv
+
 load_dotenv(override=True)
 from xtra.client import SupermarketClient
 from xtra.colruyt import ColruytClient
@@ -16,16 +14,15 @@ from xtra.logic import (
     resolve_ingredient,
     store_resolved_product,
     resolve_recipe_ingredients,
-    format_ingredient_label,
     format_resolved_products_list,
     append_or_update_recipe_section,
-    format_resolution_progress
+    format_ambiguous_options_markdown,
+    format_resolution_progress,
 )
 
-# Initialize server
-server = Server("colruyt-xtra")
+mcp = FastMCP("colruyt-xtra")
 
-# Global client (initialized at startup)
+# Global client (initialized at startup or dynamically)
 client: Optional[SupermarketClient] = None
 
 def get_client() -> Optional[ColruytClient]:
@@ -33,273 +30,403 @@ def get_client() -> Optional[ColruytClient]:
     if client is not None:
         return client
     session_id = os.environ.get("CLPBFF_SESSION")
-    api_key = os.environ.get("X_CG_APIKEY")
+    api_key = os.environ.get("X_CG_APIKEY") or os.environ.get("COLRUYT_API_KEY")
     place_id = os.environ.get("COLRUYT_PLACE_ID")
     if not session_id:
         return None
-    return ColruytClient(session_id=session_id, api_key=api_key, place_id=place_id)
+    try:
+        return ColruytClient(session_id=session_id, api_key=api_key, place_id=place_id)
+    except ValueError:
+        return None
 
-@server.list_tools()
-async def handle_list_tools() -> List[types.Tool]:
-    return [
-        types.Tool(
-            name="resolve_ingredient",
-            description="Resolve an ingredient string to its corresponding supermarket product id using local SQLite fuzzy matching and search API. Use this tool whenever the user asks to resolve, search, or find a product ID for a single ingredient or item. If ambiguous, up to 5 options are returned from the list. The sixth option is 'other' and if chosen, increase offset by 5 on the next call.",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "ingredient": {"type": "string", "description": "Ingredient string to resolve"},
-                    "offset": {"type": "integer", "description": "Offset for options pagination (default: 0)"}
-                },
-                "required": ["ingredient"]
-            }
-        ),
-        types.Tool(
-            name="add_items_to_list",
-            description="Add products to the user's supermarket shopping list. Use this tool whenever the user asks to add product IDs or items directly to their shopping list.",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "product_ids": {
-                        "type": "array", 
-                        "items": {"type": "string"},
-                        "description": "List of product IDs"
-                    }
-                },
-                "required": ["product_ids"]
-            }
-        ),
-        types.Tool(
-            name="add_recipe_to_list",
-            description="Parse a recipe markdown file and add ingredients to the shopping list. Use this tool whenever the user asks to add all ingredients from a recipe file to their shopping list.",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "recipe_filename": {"type": "string", "description": "Full path to the recipe markdown file"}
-                },
-                "required": ["recipe_filename"]
-            }
-        ),
-        types.Tool(
-            name="resolve_recipe",
-            description="Resolve all ingredients in a recipe using LLM extraction and product id resolution. Use this tool whenever the user asks to resolve, check, or look up products for all ingredients in a recipe without modifying the file. Prompts for one ambiguous ingredient at a time.",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "recipe_filename": {
-                        "type": "string",
-                        "description": "Full path to the recipe markdown file"
-                    },
-                    "recipe_content": {
-                        "type": "string",
-                        "description": "Direct markdown content of the recipe (optional if recipe_filename is provided)"
-                    },
-                    "offset": {
-                        "type": "integer",
-                        "description": "Pagination offset if user chooses 'Other' for the current ambiguous ingredient (default: 0)"
-                    }
-                }
-            }
-        ),
-        types.Tool(
-            name="annotate_recipe_with_productids",
-            description="Extract and resolve all ingredients in a recipe markdown file to product ids and append or update a '## Resolved Products' section at the end of the file (format: '- <ingredient> [productId=<id>]'). Use this tool whenever the user asks to annotate, add, or append resolved product IDs to a recipe markdown file. Only writes to the file when 100% of ingredients are resolved; if ingredients are ambiguous or unmapped, returns progress and options to prompt the user.",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "recipe_filename": {
-                        "type": "string",
-                        "description": "Full path to the recipe markdown file"
-                    },
-                    "offset": {
-                        "type": "integer",
-                        "description": "Pagination offset if user chooses 'Other' for the current ambiguous ingredient (default: 0)"
-                    }
-                },
-                "required": ["recipe_filename"]
-            }
-        ),
-        types.Tool(
-            name="store_resolved_product",
-            description="Store a resolved product mapping for an ingredient in the local SQLite database after a user selection. Use this tool whenever the user asks to store, save, remember, or map a product selection for an ingredient.",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "ingredient": {"type": "string", "description": "Ingredient string (e.g. from resolve_ingredient or recipe)"},
-                    "product_id": {"type": "string", "description": "Selected Colruyt product ID"},
-                    "name": {"type": "string", "description": "Product name"},
-                    "brand": {"type": "string", "description": "Product brand (optional)"},
-                    "top_category_name": {"type": "string", "description": "Product top category name (optional)"}
-                },
-                "required": ["ingredient", "product_id", "name"]
-            }
-        )
-    ]
-
-@server.call_tool()
-async def handle_call_tool(name: str, arguments: Dict[str, Any]) -> List[types.TextContent]:
-    client = get_client()
-    if not client or not client.session_id:
-        return [types.TextContent(
-            type="text",
-            text="Error: Colruyt client not properly initialized. "
-                 "Please set the CLPBFF_SESSION environment variable or pass --session-id at server startup."
-        )]
+@mcp.tool(
+    name="resolve_ingredient",
+    description="Resolve an ingredient string to its corresponding supermarket product id using local SQLite fuzzy matching and the supermarket provider's search API. Use this tool whenever the user asks to resolve, search, or find a product ID for a single ingredient or item. IMPORTANT: When status is 'ambiguous', ALWAYS output the 'presentation_markdown' field directly to the user so they can pick an option number or request the next page, then call store_resolved_product with their choice."
+)
+async def resolve_ingredient_tool(
+    ingredient: str,
+    limit: int = 5,
+    offset: int = 0
+) -> Dict[str, Any]:
+    """Resolve an ingredient string to a Colruyt product."""
+    curr_client = get_client()
+    if not curr_client or not curr_client.session_id:
+        return {
+            "status": "error",
+            "error": "Colruyt client not properly initialized. Please set the CLPBFF_SESSION environment variable or pass --session-id at server startup."
+        }
 
     try:
-        if name == "resolve_ingredient":
-            ingredient = arguments["ingredient"]
-            offset = arguments.get("offset", 0)
-            query, resolved = await resolve_ingredient(ingredient, client)
+        query, resolved = await resolve_ingredient(ingredient, curr_client)
 
-            if isinstance(resolved, Product):
-                info_lines = [
-                    f"Product Resolved:",
-                    f"- Normalized Ingredient: {query}",
-                    f"- Name: {resolved.name}",
-                    f"- Product ID: {resolved.product_id}",
-                    f"- Brand: {resolved.brand or 'N/A'}",
-                    f"- Content: {resolved.content or 'N/A'}",
-                    f"- Description: {resolved.description or 'N/A'}",
-                    f"- Conservation: {resolved.conservation_info or 'N/A'}",
-                    f"- Usage Info: {resolved.usage_info or 'N/A'}"
-                ]
-                return [types.TextContent(type="text", text="\n".join(info_lines))]
-            elif isinstance(resolved, list) and resolved:
-                page_size = 5
-                batch = resolved[offset : offset + page_size]
-                options = [f"{i+1}. {p.name} ({p.product_id})" for i, p in enumerate(batch)]
-                if (offset + len(batch)) < len(resolved):
-                    options.append(f"{len(batch)+1}. Other")
-                return [types.TextContent(type="text", text=f"Ambiguous ingredient '{ingredient}' (normalized: '{query}'). Options:\n" + "\n".join(options))]
-            else:
-                return [types.TextContent(type="text", text=f"No product found for '{ingredient}' (normalized: '{query}').")]
-
-        elif name == "add_items_to_list":
-            ids = arguments["product_ids"]
-            dummy_products = [Product(name=f"Product {id}", product_id=id) for id in ids]
-            updated_list = await client.add_items_to_list(dummy_products)
-            return [types.TextContent(type="text", text=f"Added {len(ids)} items. Current list has {len(updated_list)} items.")]
-
-        elif name == "add_recipe_to_list":
-            path = arguments["recipe_filename"]
-            if not os.path.exists(path):
-                return [types.TextContent(type="text", text=f"Error: File '{path}' not found.")]
-
-            with open(path, "r", encoding="utf-8") as f:
-                content = f.read()
-
-            error, result = await resolve_recipe_ingredients(content, client)
-            if error or result is None:
-                return [types.TextContent(type="text", text=f"Error: {error}")]
-
-            to_add = [prod for _, prod in result.resolved]
-            if to_add:
-                await client.add_items_to_list(to_add)
-
-            results_lines = []
-            for ing, prod in result.resolved:
-                results_lines.append(f"✅ {format_ingredient_label(ing)} -> {prod.name}")
-            for ing, _, _ in result.ambiguous:
-                results_lines.append(f"❓ {format_ingredient_label(ing)} (Ambiguous)")
-            for ing, _ in result.not_found:
-                results_lines.append(f"❌ {format_ingredient_label(ing)} (Not found)")
-
-            response_text = "Recipe processing results:\n" + "\n".join(results_lines)
-            if result.ambiguous:
-                response_text += "\n\nSome ingredients are ambiguous. Please choose from the following:\n"
-                for ing, _, options in result.ambiguous:
-                    label = format_ingredient_label(ing)
-                    response_text += f"\nFor '{label}':\n"
-                    page_size = 5
-                    batch = options[:page_size]
-                    for i, opt in enumerate(batch):
-                        response_text += f"  {i+1}. {opt.name} ({opt.product_id})\n"
-                    if len(options) > page_size:
-                        response_text += f"  {len(batch)+1}. Other\n"
-
-            return [types.TextContent(type="text", text=response_text)]
-
-        elif name == "resolve_recipe":
-            content = arguments.get("recipe_content")
-            filename = arguments.get("recipe_filename")
-            offset = arguments.get("offset", 0)
-
-            if not content and filename:
-                if not os.path.exists(filename):
-                    return [types.TextContent(type="text", text=f"Error: Recipe file '{filename}' not found.")]
-                with open(filename, "r", encoding="utf-8") as f:
-                    content = f.read()
-
-            if not content:
-                return [types.TextContent(type="text", text="Error: Either recipe_filename or recipe_content must be provided.")]
-
-            error, result = await resolve_recipe_ingredients(content, client)
-            if error or result is None:
-                return [types.TextContent(type="text", text=f"Error: {error}")]
-
-            return [types.TextContent(type="text", text=format_resolution_progress(result, offset))]
-
-        elif name == "annotate_recipe_with_productids":
-            filename = arguments["recipe_filename"]
-            offset = arguments.get("offset", 0)
-
-            if not os.path.exists(filename):
-                return [types.TextContent(type="text", text=f"Error: Recipe file '{filename}' not found.")]
-
-            with open(filename, "r", encoding="utf-8") as f:
-                content = f.read()
-
-            error, result = await resolve_recipe_ingredients(content, client)
-            if error or result is None:
-                return [types.TextContent(type="text", text=f"Error: {error}")]
-
-            if not result.is_complete:
-                progress_text = format_resolution_progress(result, offset)
-                return [types.TextContent(
-                    type="text",
-                    text=f"Cannot annotate recipe: not all ingredients are resolved ({result.resolved_count}/{result.total_count} resolved).\n\n{progress_text}"
-                )]
-
-            products_list_md = format_resolved_products_list(result.resolved)
-            updated_content = append_or_update_recipe_section(content, "Resolved Products", products_list_md)
-
-            with open(filename, "w", encoding="utf-8") as f:
-                f.write(updated_content)
-
-            return [types.TextContent(
-                type="text",
-                text=f"Successfully annotated recipe '{filename}' with {len(result.resolved)} resolved products in '## Resolved Products' section:\n\n{products_list_md}"
-            )]
-
-        elif name == "store_resolved_product":
-            ingredient = arguments.get("ingredient")
-            product_id = arguments["product_id"]
-            name_arg = arguments["name"]
-            brand_arg = arguments.get("brand")
-            top_category_name_arg = arguments.get("top_category_name")
-            stored = await store_resolved_product(
+        if isinstance(resolved, Product):
+            return {
+                "status": "resolved",
+                "query": query,
+                "ingredient": ingredient,
+                "product": resolved.model_dump()
+            }
+        elif isinstance(resolved, list) and resolved:
+            paged_items = [p.model_dump() for p in resolved[offset : offset + limit]]
+            has_more = (offset + limit) < len(resolved)
+            next_offset = offset + limit if has_more else None
+            presentation_md = format_ambiguous_options_markdown(
                 ingredient=ingredient,
-                product_id=product_id,
-                name=name_arg,
-                brand=brand_arg,
-                client=client,
-                top_category_name=top_category_name_arg
+                query=query,
+                options=paged_items,
+                has_more=has_more,
+                next_offset=next_offset
             )
-            return [types.TextContent(
-                type="text",
-                text=f"Stored resolved product: '{ingredient}' -> {stored.name} ({stored.product_id})"
-            )]
-
+            return {
+                "status": "ambiguous",
+                "query": query,
+                "ingredient": ingredient,
+                "results": paged_items,
+                "pagination": {
+                    "offset": offset,
+                    "limit": limit,
+                    "total_matches": len(resolved),
+                    "has_more": has_more,
+                    "next_offset": next_offset
+                },
+                "presentation_markdown": presentation_md
+            }
         else:
-            return [types.TextContent(type="text", text=f"Unknown tool: {name}")]
-
+            return {
+                "status": "not_found",
+                "query": query,
+                "ingredient": ingredient,
+                "results": [],
+                "pagination": {
+                    "offset": offset,
+                    "limit": limit,
+                    "total_matches": 0,
+                    "has_more": False,
+                    "next_offset": None
+                }
+            }
     except Exception as e:
-        return [types.TextContent(type="text", text=f"Error: {str(e)}")]
+        return {"status": "error", "error": str(e)}
 
-async def main():
+@mcp.tool(
+    name="add_items_to_list",
+    description="Add products to the user's supermarket shopping list. Use this tool whenever the user asks to add product IDs or items directly to their shopping list."
+)
+async def add_items_to_list_tool(product_ids: List[str]) -> Dict[str, Any]:
+    """Add products to shopping list by product IDs."""
+    curr_client = get_client()
+    if not curr_client or not curr_client.session_id:
+        return {
+            "status": "error",
+            "error": "Colruyt client not properly initialized. Please set the CLPBFF_SESSION environment variable or pass --session-id at server startup."
+        }
+
+    try:
+        dummy_products = [Product(name=f"Product {pid}", product_id=pid) for pid in product_ids]
+        updated_list = await curr_client.add_items_to_list(dummy_products)
+        return {
+            "status": "success",
+            "added_count": len(product_ids),
+            "product_ids": product_ids,
+            "total_list_count": len(updated_list)
+        }
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+@mcp.tool(
+    name="add_recipe_to_list",
+    description="Parse a recipe markdown file and add ingredients to the shopping list. Use this tool whenever the user asks to add all ingredients from a recipe file to their shopping list."
+)
+async def add_recipe_to_list_tool(recipe_filename: str) -> Dict[str, Any]:
+    """Parse a recipe markdown file and add ingredients to the shopping list."""
+    curr_client = get_client()
+    if not curr_client or not curr_client.session_id:
+        return {
+            "status": "error",
+            "error": "Colruyt client not properly initialized. Please set the CLPBFF_SESSION environment variable or pass --session-id at server startup."
+        }
+
+    try:
+        path = recipe_filename
+        if not os.path.exists(path):
+            return {"status": "error", "error": f"File '{path}' not found."}
+
+        with open(path, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        error, result = await resolve_recipe_ingredients(content, curr_client)
+        if error or result is None:
+            return {"status": "error", "error": error}
+
+        to_add = [prod for _, prod in result.resolved]
+        updated_list = []
+        if to_add:
+            updated_list = await curr_client.add_items_to_list(to_add)
+
+        return {
+            "status": "success" if result.is_complete else "partial",
+            "recipe_filename": recipe_filename,
+            "resolved": [
+                {"ingredient": ing.model_dump(), "product": prod.model_dump()}
+                for ing, prod in result.resolved
+            ],
+            "ambiguous": [
+                {
+                    "ingredient": ing.model_dump(),
+                    "query": q,
+                    "options": [opt.model_dump() for opt in opts]
+                }
+                for ing, q, opts in result.ambiguous
+            ],
+            "not_found": [
+                {"ingredient": ing.model_dump(), "query": q}
+                for ing, q in result.not_found
+            ],
+            "added_count": len(to_add),
+            "total_list_count": len(updated_list) if to_add else 0
+        }
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+@mcp.tool(
+    name="resolve_recipe",
+    description="Resolve all ingredients in a recipe using LLM extraction and product id resolution. Use this tool whenever the user asks to resolve, check, or look up products for all ingredients in a recipe without modifying the file. IMPORTANT: When status is 'incomplete' or ingredients are ambiguous, ALWAYS output the 'presentation_markdown' field directly to the user."
+)
+async def resolve_recipe_tool(
+    recipe_filename: Optional[str] = None,
+    recipe_content: Optional[str] = None,
+    limit: int = 5,
+    offset: int = 0
+) -> Dict[str, Any]:
+    """Resolve all ingredients in a recipe."""
+    curr_client = get_client()
+    if not curr_client or not curr_client.session_id:
+        return {
+            "status": "error",
+            "error": "Colruyt client not properly initialized. Please set the CLPBFF_SESSION environment variable or pass --session-id at server startup."
+        }
+
+    try:
+        content = recipe_content
+        if not content and recipe_filename:
+            if not os.path.exists(recipe_filename):
+                return {"status": "error", "error": f"Recipe file '{recipe_filename}' not found."}
+            with open(recipe_filename, "r", encoding="utf-8") as f:
+                content = f.read()
+
+        if not content:
+            return {"status": "error", "error": "Either recipe_filename or recipe_content must be provided."}
+
+        error, result = await resolve_recipe_ingredients(content, curr_client)
+        if error or result is None:
+            return {"status": "error", "error": error}
+
+        ambiguous_data = []
+        for ing, q, opts in result.ambiguous:
+            paged_opts = [opt.model_dump() for opt in opts[offset : offset + limit]]
+            has_more = (offset + limit) < len(opts)
+            next_offset = offset + limit if has_more else None
+            presentation_md = format_ambiguous_options_markdown(
+                ingredient=ing.name,
+                query=q,
+                options=paged_opts,
+                has_more=has_more,
+                next_offset=next_offset
+            )
+            ambiguous_data.append({
+                "ingredient": ing.model_dump(),
+                "query": q,
+                "options": paged_opts,
+                "pagination": {
+                    "offset": offset,
+                    "limit": limit,
+                    "total_matches": len(opts),
+                    "has_more": has_more,
+                    "next_offset": next_offset
+                },
+                "presentation_markdown": presentation_md
+            })
+
+        return {
+            "status": "complete" if result.is_complete else "incomplete",
+            "total_count": result.total_count,
+            "resolved_count": result.resolved_count,
+            "ambiguous_count": len(result.ambiguous),
+            "not_found_count": len(result.not_found),
+            "resolved": [
+                {"ingredient": ing.model_dump(), "product": prod.model_dump()}
+                for ing, prod in result.resolved
+            ],
+            "ambiguous": ambiguous_data,
+            "not_found": [
+                {"ingredient": ing.model_dump(), "query": q}
+                for ing, q in result.not_found
+            ],
+            "presentation_markdown": format_resolution_progress(result, offset, limit)
+        }
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+@mcp.tool(
+    name="annotate_recipe_with_productids",
+    description="Extract and resolve all ingredients in a recipe markdown file to product ids and append or update a '## Resolved Products' section at the end of the file (format: '- <ingredient> [productId=<id>]'). Use this tool whenever the user asks to annotate, add, or append resolved product IDs to a recipe markdown file. Only writes to the file when 100% of ingredients are resolved; if incomplete or ambiguous, ALWAYS output the 'presentation_markdown' field directly to the user."
+)
+async def annotate_recipe_with_productids_tool(
+    recipe_filename: str,
+    limit: int = 5,
+    offset: int = 0
+) -> Dict[str, Any]:
+    """Extract and annotate recipe markdown with resolved product IDs."""
+    curr_client = get_client()
+    if not curr_client or not curr_client.session_id:
+        return {
+            "status": "error",
+            "error": "Colruyt client not properly initialized. Please set the CLPBFF_SESSION environment variable or pass --session-id at server startup."
+        }
+
+    try:
+        if not os.path.exists(recipe_filename):
+            return {"status": "error", "error": f"Recipe file '{recipe_filename}' not found."}
+
+        with open(recipe_filename, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        error, result = await resolve_recipe_ingredients(content, curr_client)
+        if error or result is None:
+            return {"status": "error", "error": error}
+
+        if not result.is_complete:
+            ambiguous_data = []
+            for ing, q, opts in result.ambiguous:
+                paged_opts = [opt.model_dump() for opt in opts[offset : offset + limit]]
+                has_more = (offset + limit) < len(opts)
+                next_offset = offset + limit if has_more else None
+                presentation_md = format_ambiguous_options_markdown(
+                    ingredient=ing.name,
+                    query=q,
+                    options=paged_opts,
+                    has_more=has_more,
+                    next_offset=next_offset
+                )
+                ambiguous_data.append({
+                    "ingredient": ing.model_dump(),
+                    "query": q,
+                    "options": paged_opts,
+                    "pagination": {
+                        "offset": offset,
+                        "limit": limit,
+                        "total_matches": len(opts),
+                        "has_more": has_more,
+                        "next_offset": next_offset
+                    },
+                    "presentation_markdown": presentation_md
+                })
+            return {
+                "status": "incomplete",
+                "message": f"Cannot annotate recipe: not all ingredients are resolved ({result.resolved_count}/{result.total_count} resolved).",
+                "total_count": result.total_count,
+                "resolved_count": result.resolved_count,
+                "ambiguous_count": len(result.ambiguous),
+                "not_found_count": len(result.not_found),
+                "resolved": [
+                    {"ingredient": ing.model_dump(), "product": prod.model_dump()}
+                    for ing, prod in result.resolved
+                ],
+                "ambiguous": ambiguous_data,
+                "not_found": [
+                    {"ingredient": ing.model_dump(), "query": q}
+                    for ing, q in result.not_found
+                ],
+                "presentation_markdown": format_resolution_progress(result, offset, limit)
+            }
+
+        products_list_md = format_resolved_products_list(result.resolved)
+        updated_content = append_or_update_recipe_section(content, "Resolved Products", products_list_md)
+
+        with open(recipe_filename, "w", encoding="utf-8") as f:
+            f.write(updated_content)
+
+        return {
+            "status": "annotated",
+            "recipe_filename": recipe_filename,
+            "resolved_count": len(result.resolved),
+            "resolved": [
+                {"ingredient": ing.model_dump(), "product": prod.model_dump()}
+                for ing, prod in result.resolved
+            ]
+        }
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+@mcp.tool(
+    name="store_resolved_product",
+    description="Store a resolved product mapping for an ingredient in the local SQLite database after a user selection. Use this tool whenever the user asks to store, save, remember, or map a product selection for an ingredient."
+)
+async def store_resolved_product_tool(
+    ingredient: str,
+    product_id: str,
+    name: str,
+    brand: Optional[str] = None,
+    top_category_name: Optional[str] = None
+) -> Dict[str, Any]:
+    """Store resolved product mapping in local SQLite database."""
+    curr_client = get_client()
+    if not curr_client or not curr_client.session_id:
+        return {
+            "status": "error",
+            "error": "Colruyt client not properly initialized. Please set the CLPBFF_SESSION environment variable or pass --session-id at server startup."
+        }
+
+    try:
+        stored = await store_resolved_product(
+            ingredient=ingredient,
+            product_id=product_id,
+            name=name,
+            brand=brand,
+            client=curr_client,
+            top_category_name=top_category_name
+        )
+        return {
+            "status": "stored",
+            "query": ingredient,
+            "product": stored.model_dump()
+        }
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+@mcp.prompt()
+def product_assistant_mode() -> str:
+    """System instructions for guiding product discovery & list selection."""
+    return (
+        "You are an interactive supermarket shopping and recipe assistant.\n\n"
+        "When resolving ingredients or recipes, if a tool response indicates status 'ambiguous' or 'incomplete':\n"
+        "1. Display the items using the preformatted list in 'presentation_markdown' (at most 5 items in a clean numbered list with name, brand, and category).\n"
+        "2. Always inform the user if additional results exist on the next page.\n"
+        "3. Explicitly offer two actions: pick a number to resolve and remember the product (via 'store_resolved_product'), or request 'next' to see more options with next_offset."
+    )
+
+async def handle_list_tools() -> List[types.Tool]:
+    """Compatibility helper to list registered tools."""
+    return await mcp.list_tools()
+
+async def handle_call_tool(name: str, arguments: Dict[str, Any]) -> List[types.TextContent]:
+    """Compatibility helper to call registered tools."""
+    res = await mcp.call_tool(name, arguments)
+    if isinstance(res, tuple):
+        return res[0]
+    return [types.TextContent(type="text", text=str(res))]
+
+async def handle_list_prompts():
+    """Compatibility helper to list registered prompts."""
+    return await mcp.list_prompts()
+
+async def handle_get_prompt(name: str, arguments: Optional[Dict[str, Any]] = None):
+    """Compatibility helper to get prompt content."""
+    return await mcp.get_prompt(name, arguments)
+
+def main():
     global client
-    
+
     parser = argparse.ArgumentParser(description="Colruyt Xtra MCP Server")
     parser.add_argument("--session-id", "-s", help="Colruyt Xtra session ID (clpbff_session cookie)")
     parser.add_argument("--api-key", "-a", help="Custom x-cg-apikey header value")
@@ -312,22 +439,13 @@ async def main():
 
     if not session_id:
         print("Warning: session_id not set via CLI argument or CLPBFF_SESSION environment variable.", file=sys.stderr)
-    
-    client = ColruytClient(session_id=session_id, api_key=api_key, place_id=place_id)
 
-    async with mcp.server.stdio.stdio_server() as (read_stream, write_stream):
-        await server.run(
-            read_stream,
-            write_stream,
-            InitializationOptions(
-                server_name="colruyt-xtra",
-                server_version="0.1.0",
-                capabilities=server.get_capabilities(
-                    notification_options=NotificationOptions(),
-                    experimental_capabilities={}
-                ),
-            ),
-        )
+    try:
+        client = ColruytClient(session_id=session_id, api_key=api_key, place_id=place_id)
+    except Exception:
+        pass
+
+    mcp.run(transport="stdio")
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
