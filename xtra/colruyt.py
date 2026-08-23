@@ -30,10 +30,10 @@ class ColruytProduct(BaseModel):
     gtin: Optional[List[str]] = Field(None, alias="GTIN")
     topCategoryName: Optional[str] = None
 
-    def to_product(self, normalized_name: Optional[str] = None) -> Product:
+    def to_product(self, query: Optional[str] = None) -> Product:
         """Converts Colruyt-specific API response object into unified internal Product domain model."""
         return Product(
-            normalized_name=normalized_name,
+            query=query,
             product_id=self.technicalArticleNumber,
             name=self.name,
             brand=self.brand,

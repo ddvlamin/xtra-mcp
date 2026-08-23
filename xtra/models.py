@@ -5,7 +5,7 @@ class Product(BaseModel):
     """Unified internal domain model representing a product."""
     model_config = ConfigDict(populate_by_name=True)
 
-    normalized_name: Optional[str] = None
+    query: Optional[str] = None
     product_id: str
     name: str
     brand: Optional[str] = None

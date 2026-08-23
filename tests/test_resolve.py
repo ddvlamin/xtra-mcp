@@ -11,7 +11,7 @@ def memory_db():
 @pytest.mark.asyncio
 async def test_resolve_ingredient_from_db(memory_db):
     memory_db.store_product(Product(
-        normalized_name="kipfilets",
+        query="kipfilets",
         product_id="999",
         name="Saved Kipfilet"
     ))
@@ -82,10 +82,10 @@ async def test_store_product_direct(memory_db):
             name="Basmati Rice 1kg",
             product_id="777",
             brand="BONI",
-            normalized_name="Basmati Rijst",
+            query="Basmati Rijst",
             conservation_info="Gekoeld"
         )
     )
-    assert stored.normalized_name == "Basmati Rijst"
+    assert stored.query == "Basmati Rijst"
     assert stored.product_id == "777"
     assert stored.conservation_info == "Gekoeld"

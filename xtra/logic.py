@@ -108,7 +108,7 @@ async def resolve_ingredient(
         gtin = resolved_product.gtin[0] if (resolved_product.gtin and len(resolved_product.gtin) > 0) else None # TODO: gtin is probably still Colruyt specific
         product_info = await client.get_product_info(resolved_product.product_id, gtin=gtin)
         
-        resolved_product.normalized_name = query
+        resolved_product.query = query
         resolved_product.description = product_info.get("product_description")
         resolved_product.conservation_info = product_info.get("conservation_info")
         resolved_product.usage_info = product_info.get("usage_info")
@@ -126,26 +126,29 @@ async def store_resolved_product(
     name: str,
     brand: Optional[str] = None,
     client: Optional[SupermarketClient] = None,
-    db: Optional[Database] = None
+    db: Optional[Database] = None,
+    top_category_name: Optional[str] = None
 ) -> Product:
     """Stores a chosen product resolution into the local SQLite database.
 
     Args:
-        ingredient: String representing the normalized version of the ingredient.
+        ingredient: String representing the search query/ingredient.
         product_id: Selected Colruyt product ID.
         name: Name of the product.
         brand: Optional brand name.
         client: Optional SupermarketClient instance to fetch additional details.
         db: Optional Database instance.
+        top_category_name: Optional top category name.
     """
     if db is None:
         db = Database()
 
     product = Product(
-        normalized_name=ingredient,
+        query=ingredient,
         product_id=product_id,
         name=name,
-        brand=brand
+        brand=brand,
+        top_category_name=top_category_name
     )
 
     if client:
@@ -186,16 +189,13 @@ async def resolve_recipe_ingredients(
     not_found = []
 
     for item in extracted_ingredients:
-        ing_obj = item if isinstance(item, ExtractedIngredient) else (
-            ExtractedIngredient(**item) if isinstance(item, dict) else ExtractedIngredient(name=str(item))
-        )
-        query, res = await resolve_ingredient(ing_obj.name, client, db=db)
+        query, res = await resolve_ingredient(item.name, client, db=db)
         if isinstance(res, Product):
-            resolved.append((ing_obj, res))
+            resolved.append((item, res))
         elif isinstance(res, list) and res:
-            ambiguous.append((ing_obj, query, res))
+            ambiguous.append((item, query, res))
         else:
-            not_found.append((ing_obj, query))
+            not_found.append((item, query))
 
     result = RecipeResolutionResult(resolved=resolved, ambiguous=ambiguous, not_found=not_found)
     return None, result

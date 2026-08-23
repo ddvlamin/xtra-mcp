@@ -28,7 +28,7 @@ async def test_store_resolved_product():
         brand="BONI",
         db=db
     )
-    assert stored.normalized_name == "rode currypasta"
+    assert stored.query == "rode currypasta"
     assert stored.product_id == "111222"
     assert stored.name == "Rode Curry Pasta 200g"
 

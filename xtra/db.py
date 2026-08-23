@@ -3,6 +3,7 @@ import sqlite3
 from typing import List, Optional
 from rapidfuzz import process, fuzz, utils
 from xtra.models import Product
+from xtra.migrations import run_migrations
 
 DEFAULT_DB_PATH = os.path.join("resources", "colruyt_products.db")
 
@@ -31,7 +32,7 @@ class Database:
         cursor = conn.cursor()
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS products (
-                normalized_name TEXT PRIMARY KEY,
+                query TEXT PRIMARY KEY,
                 product_id TEXT NOT NULL,
                 product_name TEXT NOT NULL,
                 product_brand TEXT,
@@ -43,10 +44,7 @@ class Database:
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
         """)
-        cursor.execute("PRAGMA table_info(products)")
-        columns = [col[1] for col in cursor.fetchall()]
-        if "top_category_name" not in columns:
-            cursor.execute("ALTER TABLE products ADD COLUMN top_category_name TEXT")
+        run_migrations(conn)
         conn.commit()
         if self.db_path != ":memory:":
             conn.close()
@@ -59,18 +57,18 @@ class Database:
             raise ValueError("Product product_id must be provided.")
         if not product.name:
             raise ValueError("Product name must be provided.")
-        if not product.normalized_name:
-            raise ValueError("Product normalized_name must be provided.")
+        if not product.query:
+            raise ValueError("Product query must be provided.")
 
         conn = self.get_connection()
         cursor = conn.cursor()
         cursor.execute("""
             INSERT INTO products (
-                normalized_name, product_id, product_name, product_brand,
+                query, product_id, product_name, product_brand,
                 product_description, conservation_info, usage_info, content,
                 top_category_name
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(normalized_name) DO UPDATE SET
+            ON CONFLICT(query) DO UPDATE SET
                 product_id = excluded.product_id,
                 product_name = excluded.product_name,
                 product_brand = excluded.product_brand,
@@ -81,7 +79,7 @@ class Database:
                 top_category_name = excluded.top_category_name,
                 created_at = CURRENT_TIMESTAMP
         """, (
-            product.normalized_name,
+            product.query,
             product.product_id,
             product.name,
             product.brand,
@@ -95,36 +93,40 @@ class Database:
         if self.db_path != ":memory:":
             conn.close()
 
-        return self.get_product(product.normalized_name) or product
+        return self.get_product(product.query) or product
 
-    def get_product(self, normalized_name: str) -> Optional[Product]:
+    def get_product(self, query: str) -> Optional[Product]:
         conn = self.get_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM products WHERE normalized_name = ?", (normalized_name,))
+        cursor.execute("SELECT * FROM products WHERE query = ?", (query,))
         row = cursor.fetchone()
         result = self._row_to_product(row) if row else None
         if self.db_path != ":memory:":
             conn.close()
         return result
 
-    def delete_product(self, normalized_name: Optional[str] = None, product_id: Optional[str] = None) -> int:
-        """Deletes product(s) matching normalized_name or product_id.
+    def delete_product(
+        self,
+        query: Optional[str] = None,
+        product_id: Optional[str] = None
+    ) -> int:
+        """Deletes product(s) matching query or product_id.
         Returns the number of deleted rows.
         """
-        if not normalized_name and not product_id:
-            raise ValueError("Either normalized_name or product_id must be provided.")
+        if not query and not product_id:
+            raise ValueError("Either query or product_id must be provided.")
 
         conn = self.get_connection()
         cursor = conn.cursor()
-        if normalized_name and product_id:
+        if query and product_id:
             cursor.execute(
-                "DELETE FROM products WHERE normalized_name = ? AND product_id = ?",
-                (normalized_name, product_id)
+                "DELETE FROM products WHERE query = ? AND product_id = ?",
+                (query, product_id)
             )
-        elif normalized_name:
+        elif query:
             cursor.execute(
-                "DELETE FROM products WHERE normalized_name = ?",
-                (normalized_name,)
+                "DELETE FROM products WHERE query = ?",
+                (query,)
             )
         else:
             cursor.execute(
@@ -152,7 +154,7 @@ class Database:
         if not products:
             return None
 
-        mapping_dict = {p.normalized_name: p for p in products if p.normalized_name}
+        mapping_dict = {p.query: p for p in products if p.query}
         choices = list(mapping_dict.keys())
         
         result = process.extractOne(query, choices, scorer=fuzz.token_sort_ratio, processor=utils.default_process)
@@ -165,7 +167,7 @@ class Database:
     def _row_to_product(self, row: sqlite3.Row) -> Product:
         row_dict = dict(row)
         return Product(
-            normalized_name=row_dict.get("normalized_name"),
+            query=row_dict.get("query"),
             product_id=row_dict["product_id"],
             name=row_dict["product_name"],
             brand=row_dict.get("product_brand"),

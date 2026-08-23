@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 import xtra.server as server_module
-from xtra.models import Product
+from xtra.models import Product, ExtractedIngredient
 
 @pytest.mark.asyncio
 async def test_server_list_tools_includes_annotate_recipe():
@@ -29,7 +29,7 @@ async def test_annotate_recipe_success(tmp_path):
 1. Bakken.
 """)
 
-    with patch("xtra.logic.extract_ingredients_with_llm", new=AsyncMock(return_value=[{"name": "bloem", "quantity": 200, "unit": "g"}])), \
+    with patch("xtra.logic.extract_ingredients_with_llm", new=AsyncMock(return_value=[ExtractedIngredient(name="bloem", quantity=200, unit="g")])), \
          patch("xtra.logic.resolve_ingredient", new=AsyncMock(return_value=("bloem", sample_product))):
 
         result = await server_module.handle_call_tool(
@@ -66,7 +66,7 @@ async def test_annotate_recipe_replaces_existing_section(tmp_path):
 1. Bakken.
 """)
 
-    with patch("xtra.logic.extract_ingredients_with_llm", new=AsyncMock(return_value=[{"name": "bloem", "quantity": 200, "unit": "g"}])), \
+    with patch("xtra.logic.extract_ingredients_with_llm", new=AsyncMock(return_value=[ExtractedIngredient(name="bloem", quantity=200, unit="g")])), \
          patch("xtra.logic.resolve_ingredient", new=AsyncMock(return_value=("bloem", sample_product))):
 
         result = await server_module.handle_call_tool(
@@ -110,8 +110,8 @@ async def test_annotate_recipe_does_not_write_when_ambiguous(tmp_path):
             return "melk", ambig_options
 
     with patch("xtra.logic.extract_ingredients_with_llm", new=AsyncMock(return_value=[
-        {"name": "bloem", "quantity": 200, "unit": "g"},
-        {"name": "melk", "quantity": 100, "unit": "ml"}
+        ExtractedIngredient(name="bloem", quantity=200, unit="g"),
+        ExtractedIngredient(name="melk", quantity=100, unit="ml")
     ])), patch("xtra.logic.resolve_ingredient", side_effect=mock_resolve):
 
         result = await server_module.handle_call_tool(

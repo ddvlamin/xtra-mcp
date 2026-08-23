@@ -121,14 +121,15 @@ async def handle_list_tools() -> List[types.Tool]:
         ),
         types.Tool(
             name="store_resolved_product",
-            description="Store a resolved product mapping for a normalized ingredient in the local SQLite database after a user selection. Use this tool whenever the user asks to store, save, remember, or map a product selection for an ingredient.",
+            description="Store a resolved product mapping for an ingredient in the local SQLite database after a user selection. Use this tool whenever the user asks to store, save, remember, or map a product selection for an ingredient.",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "ingredient": {"type": "string", "description": "Normalized ingredient string (e.g. from resolve_ingredient)"},
+                    "ingredient": {"type": "string", "description": "Ingredient string (e.g. from resolve_ingredient or recipe)"},
                     "product_id": {"type": "string", "description": "Selected Colruyt product ID"},
                     "name": {"type": "string", "description": "Product name"},
-                    "brand": {"type": "string", "description": "Product brand (optional)"}
+                    "brand": {"type": "string", "description": "Product brand (optional)"},
+                    "top_category_name": {"type": "string", "description": "Product top category name (optional)"}
                 },
                 "required": ["ingredient", "product_id", "name"]
             }
@@ -272,16 +273,18 @@ async def handle_call_tool(name: str, arguments: Dict[str, Any]) -> List[types.T
             )]
 
         elif name == "store_resolved_product":
-            ingredient = arguments.get("normalized_ingredient") or arguments["ingredient"]
+            ingredient = arguments.get("ingredient")
             product_id = arguments["product_id"]
             name_arg = arguments["name"]
             brand_arg = arguments.get("brand")
+            top_category_name_arg = arguments.get("top_category_name")
             stored = await store_resolved_product(
                 ingredient=ingredient,
                 product_id=product_id,
                 name=name_arg,
                 brand=brand_arg,
-                client=client
+                client=client,
+                top_category_name=top_category_name_arg
             )
             return [types.TextContent(
                 type="text",

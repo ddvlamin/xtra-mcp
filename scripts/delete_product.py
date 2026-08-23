@@ -9,11 +9,12 @@ from xtra.db import Database
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Delete a product record from the Colruyt products database by normalized name or product ID."
+        description="Delete a product record from the Colruyt products database by query or product ID."
     )
     parser.add_argument(
-        "-n", "--normalized-name",
-        help="Normalized ingredient name to delete (e.g. 'kipfilet')"
+        "-q", "--query",
+        dest="query",
+        help="Search query / ingredient name to delete (e.g. 'kipfilet')"
     )
     parser.add_argument(
         "-p", "--product-id",
@@ -26,13 +27,13 @@ def main():
 
     args = parser.parse_args()
 
-    if not args.normalized_name and not args.product_id:
-        parser.error("At least one of --normalized-name (-n) or --product-id (-p) is required.")
+    if not args.query and not args.product_id:
+        parser.error("At least one of --query (-q) or --product-id (-p) is required.")
 
     db = Database(db_path=args.db_path)
     try:
         deleted_count = db.delete_product(
-            normalized_name=args.normalized_name,
+            query=args.query,
             product_id=args.product_id
         )
         if deleted_count > 0:

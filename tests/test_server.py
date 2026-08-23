@@ -30,26 +30,36 @@ async def test_server_call_store_resolved_product_tool():
     server_module.client = mock_client
 
     sample_product = Product(
-        normalized_name="visbouillon",
+        query="visbouillon",
         name="Finesse bouillon vetarme vis",
         product_id="4170742",
-        brand="KNORR"
+        brand="KNORR",
+        top_category_name="Conserven"
     )
 
-    with patch("xtra.server.store_resolved_product", new=AsyncMock(return_value=sample_product)):
+    with patch("xtra.server.store_resolved_product", new=AsyncMock(return_value=sample_product)) as mock_store:
         result = await server_module.handle_call_tool(
             "store_resolved_product",
             {
                 "ingredient": "visbouillon",
                 "product_id": "4170742",
                 "name": "Finesse bouillon vetarme vis",
-                "brand": "KNORR"
+                "brand": "KNORR",
+                "top_category_name": "Conserven"
             }
         )
         assert len(result) == 1
         assert "Stored resolved product:" in result[0].text
         assert "visbouillon" in result[0].text
         assert "4170742" in result[0].text
+        mock_store.assert_called_once_with(
+            ingredient="visbouillon",
+            product_id="4170742",
+            name="Finesse bouillon vetarme vis",
+            brand="KNORR",
+            client=mock_client,
+            top_category_name="Conserven"
+        )
 
 @pytest.mark.asyncio
 async def test_server_call_resolve_ingredient_tool():

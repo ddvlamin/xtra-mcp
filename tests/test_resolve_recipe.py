@@ -68,7 +68,7 @@ async def test_server_call_resolve_recipe_tool():
 1. Bakken.
 """
 
-    with patch("xtra.logic.extract_ingredients_with_llm", new=AsyncMock(return_value=[{"name": "bloem", "quantity": 200, "unit": "g"}])), \
+    with patch("xtra.logic.extract_ingredients_with_llm", new=AsyncMock(return_value=[ExtractedIngredient(name="bloem", quantity=200, unit="g")])), \
          patch("xtra.logic.resolve_ingredient", new=AsyncMock(return_value=("bloem", sample_product))):
         
         result = await server_module.handle_call_tool(
@@ -100,7 +100,7 @@ async def test_server_call_resolve_recipe_with_filepath(tmp_path):
 1. Bakken.
 """)
 
-    with patch("xtra.logic.extract_ingredients_with_llm", new=AsyncMock(return_value=[{"name": "bloem", "quantity": 200, "unit": "g"}])), \
+    with patch("xtra.logic.extract_ingredients_with_llm", new=AsyncMock(return_value=[ExtractedIngredient(name="bloem", quantity=200, unit="g")])), \
          patch("xtra.logic.resolve_ingredient", new=AsyncMock(return_value=("bloem", sample_product))):
         
         result = await server_module.handle_call_tool(
@@ -143,9 +143,9 @@ async def test_server_call_resolve_recipe_ambiguous_one_at_a_time():
             return "suiker", ambig_options_2
 
     with patch("xtra.logic.extract_ingredients_with_llm", new=AsyncMock(return_value=[
-        {"name": "bloem", "quantity": 200, "unit": "g"},
-        {"name": "melk", "quantity": 100, "unit": "ml"},
-        {"name": "suiker", "quantity": 50, "unit": "g"}
+        ExtractedIngredient(name="bloem", quantity=200, unit="g"),
+        ExtractedIngredient(name="melk", quantity=100, unit="ml"),
+        ExtractedIngredient(name="suiker", quantity=50, unit="g")
     ])), patch("xtra.logic.resolve_ingredient", side_effect=mock_resolve):
         
         result = await server_module.handle_call_tool(
