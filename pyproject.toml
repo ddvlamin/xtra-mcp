@@ -9,7 +9,9 @@ dependencies = [
     "omega-memory[server]",
     "httpx",
     "pydantic",
-    "python-dotenv"
+    "python-dotenv",
+    "rapidfuzz>=3.0.0",
+    "beautifulsoup4>=4.12.0"
 ]
 
 [dependency-groups]
@@ -18,3 +20,10 @@ dev = [
     "pytest-asyncio>=0.23.0",
     "ipykernel"
 ]
+
+[tool.setuptools.packages.find]
+include = ["xtra*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+

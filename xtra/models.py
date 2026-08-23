@@ -1,39 +1,25 @@
-from pydantic import BaseModel, Field, ConfigDict
-from typing import List, Optional
-
-class Price(BaseModel):
-    basicPrice: float
-    measurementUnitPrice: Optional[float] = None
-    measurementUnit: Optional[str] = None
+from pydantic import BaseModel, ConfigDict, Field
+from typing import List, Optional, Union
 
 class Product(BaseModel):
+    """Unified internal domain model representing a product."""
     model_config = ConfigDict(populate_by_name=True)
 
+    query: Optional[str] = None
+    product_id: str
     name: str
-    technicalArticleNumber: str
-    commercialArticleNumber: Optional[str] = None
     brand: Optional[str] = None
+    description: Optional[str] = None
+    conservation_info: Optional[str] = None
+    usage_info: Optional[str] = None
     content: Optional[str] = None
-    thumbNail: Optional[str] = None
-    price: Optional[Price] = None
-    longName: Optional[str] = Field(None, alias="LongName")
+    gtin: Optional[List[str]] = None
+    top_category_name: Optional[str] = None
+    created_at: Optional[str] = None
 
-class ProductData(BaseModel):
-    productId: str
-    quantity: int = 1
-    unitCode: str = "P"
+class ExtractedIngredient(BaseModel):
+    """Structured ingredient parsed from recipe text."""
+    name: str
+    quantity: Optional[Union[float, int, str]] = None
+    unit: Optional[str] = None
 
-class ListItem(BaseModel):
-    id: str
-    description: str
-    productData: ProductData
-    createdAt: str
-    updatedAt: str
-    completedAt: Optional[str] = None
-
-class AddItemsRequest(BaseModel):
-    items: List[ListItem]
-
-class SearchResponse(BaseModel):
-    products: List[Product]
-    totalCount: int
