@@ -4,90 +4,24 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import xtra.server as server_module
 from xtra.models import Product
 import mcp.types as types
-from xtra.colruyt import ColruytClient
 
 @pytest.mark.asyncio
 async def test_server_list_tools():
     tools = await server_module.handle_list_tools()
     tool_names = [t.name for t in tools]
 
-    # Verify exposed tools
-    assert "resolve_ingredient" in tool_names
-    assert "resolve_recipe" in tool_names
+    # Verify active exposed tools
+    assert "start_recipe_resolution" in tool_names
+    assert "resolve_ingredient_choice" in tool_names
+    assert "paginate_active_ingredient" in tool_names
     assert "add_items_to_list" in tool_names
     assert "add_recipe_to_list" in tool_names
-    assert "store_resolved_product" in tool_names
 
-    # Verify unexposed internal tools
-    assert "store_product" not in tool_names
-    assert "get_most_bought_products" not in tool_names
-    assert "search_products" not in tool_names
-
-@pytest.mark.asyncio
-async def test_server_call_store_resolved_product_tool():
-    mock_client = MagicMock()
-    mock_client.session_id = "dummy_session"
-    mock_client.get_product_info = AsyncMock(return_value={})
-    server_module.client = mock_client
-
-    sample_product = Product(
-        query="visbouillon",
-        name="Finesse bouillon vetarme vis",
-        product_id="4170742",
-        brand="KNORR",
-        top_category_name="Conserven"
-    )
-
-    with patch("xtra.server.store_resolved_product", new=AsyncMock(return_value=sample_product)) as mock_store:
-        result = await server_module.handle_call_tool(
-            "store_resolved_product",
-            {
-                "ingredient": "visbouillon",
-                "product_id": "4170742",
-                "name": "Finesse bouillon vetarme vis",
-                "brand": "KNORR",
-                "top_category_name": "Conserven"
-            }
-        )
-        assert len(result) == 1
-        data = json.loads(result[0].text)
-        assert data["status"] == "stored"
-        assert data["query"] == "visbouillon"
-        assert data["product"]["product_id"] == "4170742"
-        mock_store.assert_called_once_with(
-            ingredient="visbouillon",
-            product_id="4170742",
-            name="Finesse bouillon vetarme vis",
-            brand="KNORR",
-            client=mock_client,
-            top_category_name="Conserven"
-        )
-
-@pytest.mark.asyncio
-async def test_server_call_resolve_ingredient_tool():
-    mock_client = MagicMock()
-    mock_client.session_id = "dummy_session"
-    mock_client.get_most_bought_products = AsyncMock(return_value=[])
-    server_module.client = mock_client
-
-    sample_product = Product(
-        name="Kipfilet",
-        product_id="4804565",
-        brand="BONI",
-        content="500g",
-        description="100% kip",
-        conservation_info="Chilled",
-        usage_info="Cook thoroughly"
-    )
-
-    with patch("xtra.server.resolve_ingredient", new=AsyncMock(return_value=("kipfilet", sample_product))):
-        result = await server_module.handle_call_tool("resolve_ingredient", {"ingredient": "kipfilet"})
-        assert len(result) == 1
-        data = json.loads(result[0].text)
-        assert data["status"] == "resolved"
-        assert data["query"] == "kipfilet"
-        assert data["product"]["name"] == "Kipfilet"
-        assert data["product"]["product_id"] == "4804565"
+    # Verify removed redundant tools
+    assert "store_resolved_product" not in tool_names
+    assert "resolve_ingredient" not in tool_names
+    assert "resolve_recipe" not in tool_names
+    assert "annotate_recipe_with_productids" not in tool_names
 
 @pytest.mark.asyncio
 async def test_handle_call_tool_missing_session_id():
@@ -105,43 +39,37 @@ async def test_handle_call_tool_missing_session_id():
         server_module.client = orig_client
 
 @pytest.mark.asyncio
-async def test_server_call_resolve_ingredient_ambiguous_numbered_and_other():
+async def test_server_call_add_recipe_to_list(tmp_path):
     mock_client = MagicMock()
     mock_client.session_id = "dummy_session"
-    mock_client.get_most_bought_products = AsyncMock(return_value=[])
+    mock_client.add_items_to_list = AsyncMock(return_value=[{"id": "p1"}])
     server_module.client = mock_client
 
-    sample_products = [
-        Product(name=f"Prod {i}", product_id=str(i), top_category_name="Zuivel" if i == 1 else None)
-        for i in range(1, 8)
-    ]
+    recipe_file = tmp_path / "test_recipe.md"
+    recipe_file.write_text("# Recipe\n## Ingredients\n- 100g bloem\n")
 
-    with patch("xtra.server.resolve_ingredient", new=AsyncMock(return_value=("test_ing", sample_products))):
-        # Default offset = 0, limit = 5
-        result = await server_module.handle_call_tool("resolve_ingredient", {"ingredient": "test_ing"})
+    sample_product = Product(name="Bloem", product_id="p1")
+
+    with patch("xtra.server.start_resolution_session", new=AsyncMock(return_value={
+        "status": "completed",
+        "session_id": "s999",
+        "presentation_markdown": "Done"
+    })), patch("xtra.server.session_manager.get_session") as mock_get_sess:
+        sess = MagicMock()
+        sess.session_id = "s999"
+        sess.is_completed = True
+        sess.resolved_count = 1
+        sess.total_count = 1
+        item = MagicMock()
+        item.resolved_product = sample_product
+        sess.ingredients = [item]
+        mock_get_sess.return_value = sess
+
+        result = await server_module.handle_call_tool("add_recipe_to_list", {"recipe_filename": str(recipe_file)})
         assert len(result) == 1
         data = json.loads(result[0].text)
-        assert data["status"] == "ambiguous"
-        assert len(data["results"]) == 5
-        assert data["results"][0]["product_id"] == "1"
-        assert data["results"][4]["product_id"] == "5"
-        assert "presentation_markdown" in data
-        assert "1. Prod 1 (1) - Zuivel" in data["presentation_markdown"]
-        assert "5. Prod 5 (5)" in data["presentation_markdown"]
-        assert "6. Next page" in data["presentation_markdown"]
-
-        # Page 2 (offset = 5)
-        result_pg2 = await server_module.handle_call_tool("resolve_ingredient", {"ingredient": "test_ing", "offset": 5})
-        data_pg2 = json.loads(result_pg2[0].text)
-        assert data_pg2["status"] == "ambiguous"
-        assert len(data_pg2["results"]) == 2
-        assert data_pg2["results"][0]["product_id"] == "6"
-        assert data_pg2["results"][1]["product_id"] == "7"
-        assert data_pg2["pagination"]["has_more"] is False
-        assert data_pg2["pagination"]["next_offset"] is None
-        assert "1. Prod 6 (6)" in data_pg2["presentation_markdown"]
-        assert "2. Prod 7 (7)" in data_pg2["presentation_markdown"]
-        assert "Next page" not in data_pg2["presentation_markdown"]
+        assert data["status"] == "success"
+        assert data["added_count"] == 1
 
 @pytest.mark.asyncio
 async def test_server_product_assistant_mode_prompt():
@@ -154,6 +82,5 @@ async def test_server_product_assistant_mode_prompt():
     messages = prompt_res.messages
     assert len(messages) >= 1
     assert "presentation_markdown" in messages[0].content.text
-    assert "store_resolved_product" in messages[0].content.text
-    assert "next_offset" in messages[0].content.text
-
+    assert "resolve_ingredient_choice" in messages[0].content.text
+    assert "paginate_active_ingredient" in messages[0].content.text

@@ -3,16 +3,19 @@ Project-specific instructions for future interactions to interact with this code
 **Always use caveman skill**
 
 ## 1. Project Purpose
+MCP server and toolkit for Colruyt Supermarket integration: ingredient resolution, product search, SQLite mapping persistence, and shopping list management.
 
-## 2. Architecture
+## 2. Key Systems & Services: Colruyt Xtra MCP Server
+Always use the `colruyt-xtra` MCP tools for supermarket interactions. **NEVER run CLI bash scripts (e.g. `scripts/search.py`) when resolving or searching products.**
 
-## 3. Key Systems & Services
+Primary MCP Tools:
+- `start_recipe_resolution(ingredients=[...])`: Use for searching/resolving single or multiple products/ingredients, or full recipe files.
+- `resolve_ingredient_choice(session_id=..., selected_product_id=...)`: Confirm candidate choice and advance.
+- `paginate_active_ingredient(session_id=..., offset=...)`: Next page of candidates.
+- `add_items_to_list(product_ids=[...])`: Add items to Colruyt cart.
+- `add_recipe_to_list(recipe_filename=...)`: Resolve recipe and add to cart.
 
-## 4. Repository Structure
-
-## 5. Environment & Configuration
-
-## 6. Behavioral guidelines to reduce common LLM coding mistakes.
+## 3. Behavioral guidelines to reduce common LLM coding mistakes.
 
 **Tradeoff:** These guidelines bias toward caution over speed. For trivial tasks, use judgment.
 
