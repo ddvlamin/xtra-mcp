@@ -1603,7 +1603,6 @@ dependencies = [
     { name = "beautifulsoup4" },
     { name = "httpx" },
     { name = "mcp" },
-    { name = "omega-memory", extra = ["server"] },
     { name = "pydantic" },
     { name = "python-dotenv" },
     { name = "rapidfuzz" },
@@ -1612,6 +1611,7 @@ dependencies = [
 [package.dev-dependencies]
 dev = [
     { name = "ipykernel" },
+    { name = "omega-memory", extra = ["server"] },
     { name = "pytest" },
     { name = "pytest-asyncio" },
 ]
@@ -1621,7 +1621,6 @@ requires-dist = [
     { name = "beautifulsoup4", specifier = ">=4.12.0" },
     { name = "httpx" },
     { name = "mcp", specifier = ">=1.27.0" },
-    { name = "omega-memory", extras = ["server"] },
     { name = "pydantic" },
     { name = "python-dotenv" },
     { name = "rapidfuzz", specifier = ">=3.0.0" },
@@ -1630,6 +1629,7 @@ requires-dist = [
 [package.metadata.requires-dev]
 dev = [
     { name = "ipykernel" },
+    { name = "omega-memory", extras = ["server"] },
     { name = "pytest", specifier = ">=8.0.0" },
     { name = "pytest-asyncio", specifier = ">=0.23.0" },
 ]

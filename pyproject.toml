@@ -10,7 +10,6 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "mcp>=1.27.0",
-    "omega-memory[server]",
     "httpx",
     "pydantic",
     "python-dotenv",
@@ -20,6 +19,7 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "omega-memory[server]",
     "pytest>=8.0.0",
     "pytest-asyncio>=0.23.0",
     "ipykernel"
