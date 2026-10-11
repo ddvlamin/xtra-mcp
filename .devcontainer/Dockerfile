@@ -33,8 +33,8 @@ RUN curl -fsSL https://antigravity.google/cli/install.sh | sh
 RUN curl -fsSL https://opencode.ai/install | bash
 
 # Stow AI dotfiles
-RUN cd .ai-dotfiles && stow -v -t ~ gemini claude codex vibe
-RUN mkdir -p ~/.config/opencode/skills && cd .ai-dotfiles && stow -v -t ~/.config/opencode opencode
+RUN cd .ai-dotfiles && stow -v -d . -t ~ gemini claude codex vibe
+RUN mkdir -p ~/.config/opencode/skills && cd .ai-dotfiles && stow -v -d . -t ~/.config/opencode opencode
 RUN stow -v -t ~/.config/opencode/skills --no-folding .skills
 RUN mkdir -p ~/.agents/skills && stow -v -t ~/.agents/skills --no-folding .skills
 
