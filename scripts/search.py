@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 # Ensure repository root is on sys.path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from xtra.colruyt import ColruytClient
+from xtra.sdk.colruyt import ColruytClient
 
 # Load environment variables from .env
 load_dotenv()

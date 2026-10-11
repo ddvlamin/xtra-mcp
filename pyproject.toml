@@ -21,6 +21,11 @@ dev = [
     "ipykernel"
 ]
 
+[project.scripts]
+xtra-mcp = "xtra.mcp.server:main"
+xtra-ingest = "xtra.catalog.ingest:main"
+xtra-annotate = "xtra.catalog.annotate:main"
+
 [tool.setuptools.packages.find]
 include = ["xtra*"]
 

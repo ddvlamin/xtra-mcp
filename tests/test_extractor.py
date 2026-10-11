@@ -1,13 +1,13 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 import httpx
-from xtra.extractor import (
+from xtra.catalog.extractor import (
     IngredientExtractor,
     LLMIngredientExtractor,
     BaseIngredientExtractor,
     ExtractionError
 )
-from xtra.models import ExtractedIngredient
+from xtra.sdk.models import ExtractedIngredient
 
 def test_extractor_initialization():
     extractor = LLMIngredientExtractor(host="http://custom-host:11434", model="custom-model")

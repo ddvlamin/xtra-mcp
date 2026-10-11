@@ -1,6 +1,6 @@
 import pytest
-from xtra.db import Database
-from xtra.models import Product
+from xtra.catalog.db import Database, run_migrations
+from xtra.sdk.models import Product
 
 @pytest.fixture
 def memory_db():
@@ -142,7 +142,6 @@ def test_db_delete_product_validation(memory_db):
 
 def test_run_migrations_from_legacy_schema():
     import sqlite3
-    from xtra.migrations import run_migrations
 
     conn = sqlite3.connect(":memory:")
     cursor = conn.cursor()

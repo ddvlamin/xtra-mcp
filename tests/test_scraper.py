@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import AsyncMock, patch
-from xtra.colruyt import ColruytClient, _parse_rti_html
+from xtra.sdk.colruyt import ColruytClient, _parse_rti_html
 
 def test_parse_rti_html():
     sample_html = """

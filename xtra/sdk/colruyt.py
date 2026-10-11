@@ -1,78 +1,43 @@
 import os
+import re
 import httpx
 import uuid
 from datetime import datetime
 from typing import List, Optional, Dict
-from pydantic import BaseModel, Field, ConfigDict
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
+
 load_dotenv(override=True)
-from xtra.models import Product
-from xtra.client import SupermarketClient
 
-class Price(BaseModel):
-    basicPrice: float
-    measurementUnitPrice: Optional[float] = None
-    measurementUnit: Optional[str] = None
+from xtra.sdk.models import (
+    Product,
+    ListItem,
+    ColruytProduct,
+    Price,
+    ProductData,
+    AddItemsRequest,
+)
+from xtra.sdk.client import SupermarketClient
 
-class ColruytProduct(BaseModel):
-    """Colruyt-specific API response payload DTO."""
-    model_config = ConfigDict(populate_by_name=True)
-
-    name: str
-    technicalArticleNumber: str
-    commercialArticleNumber: Optional[str] = None
-    brand: Optional[str] = None
-    content: Optional[str] = None
-    thumbNail: Optional[str] = None
-    price: Optional[Price] = None
-    longName: Optional[str] = Field(None, alias="LongName")
-    gtin: Optional[List[str]] = Field(None, alias="GTIN")
-    topCategoryName: Optional[str] = None
-
-    def to_product(self, query: Optional[str] = None) -> Product:
-        """Converts Colruyt-specific API response object into unified internal Product domain model."""
-        return Product(
-            query=query,
-            product_id=self.technicalArticleNumber,
-            name=self.name,
-            brand=self.brand,
-            content=self.content,
-            gtin=self.gtin,
-            top_category_name=self.topCategoryName
-        )
-
-class ProductData(BaseModel):
-    productId: str
-    quantity: int = 1
-    unitCode: str = "P"
-
-class ListItem(BaseModel):
-    id: str
-    description: str
-    productData: ProductData
-    createdAt: str
-    updatedAt: str
-    completedAt: Optional[str] = None
-
-class AddItemsRequest(BaseModel):
-    items: List[ListItem]
 
 class ColruytClient(SupermarketClient):
     BASE_URL = "https://apix.colruyt.be/gateway/emec.colruyt.bffsvc/cg"
     SEARCH_URL = "https://apip.colruyt.be/gateway/emec.colruyt.protected.bffsvc/cg/nl/api/product-search-prs"
     RTI_BASE_URL = "https://rti.colruytgroup.com/nl/product-info"
 
-    def __init__(self, session_id: Optional[str] = None, api_key: Optional[str] = None, place_id: Optional[str] = None):
-        # Determine session ID from argument or environment variable
+    def __init__(
+        self,
+        session_id: Optional[str] = None,
+        api_key: Optional[str] = None,
+        place_id: Optional[str] = None
+    ):
         self.session_id = session_id or os.environ.get("CLPBFF_SESSION")
         if not self.session_id:
             raise ValueError(
                 "Colruyt session ID must be provided either via the session_id parameter "
                 "or the CLPBFF_SESSION environment variable."
             )
-        
-        # Determine API key from argument or environment variables
+
         self.api_key = api_key or os.environ.get("X_CG_APIKEY") or os.environ.get("COLRUYT_API_KEY")
         if not self.api_key:
             raise ValueError(
@@ -80,7 +45,6 @@ class ColruytClient(SupermarketClient):
                 "or the X_CG_APIKEY / COLRUYT_API_KEY environment variables."
             )
 
-        # Determine place ID from argument or environment variable
         self.place_id = place_id or os.environ.get("COLRUYT_PLACE_ID")
         if not self.place_id:
             raise ValueError(
@@ -130,7 +94,7 @@ class ColruytClient(SupermarketClient):
             response = await client.get(self.SEARCH_URL, params=params, headers=self.headers, cookies=self.cookies)
             response.raise_for_status()
             data = response.json()
-            return [ColruytProduct(**p).to_product() for p in data.get("products", [])]
+            return [ColruytProduct(**p).to_product(query=query) for p in data.get("products", [])]
 
     async def get_product_info(self, product_id: str, gtin: Optional[str] = None) -> Dict[str, Optional[str]]:
         """Scrapes product details from the Colruyt RTI portal."""
@@ -164,7 +128,7 @@ class ColruytClient(SupermarketClient):
     async def add_items_to_list(self, products: List[Product]) -> List[ListItem]:
         url = f"{self.BASE_URL}/add-items-to-list"
         now = datetime.utcnow().isoformat() + "Z"
-        
+
         items = []
         for p in products:
             item = ListItem(
@@ -175,19 +139,73 @@ class ColruytClient(SupermarketClient):
                 updatedAt=now
             )
             items.append(item)
-            
+
         request_body = AddItemsRequest(items=items)
-        
+
         async with httpx.AsyncClient() as client:
             response = await client.post(
-                url, 
-                json=request_body.dict(), 
-                headers=self.headers, 
+                url,
+                json=request_body.model_dump(),
+                headers=self.headers,
                 cookies=self.cookies
             )
             response.raise_for_status()
             data = response.json()
-            return [ListItem(**i) for i in data.get("data", {}).get("items", [])]
+            raw_items = data.get("data", {}).get("items") or data.get("items", [])
+            return [ListItem(**i) for i in raw_items]
+
+    async def get_shopping_list(
+        self,
+        place_id: Optional[str] = None,
+        limit: int = 255,
+        offset: int = 0
+    ) -> List[ListItem]:
+        """Fetch the current active shopping list."""
+        url = f"{self.BASE_URL}/latest-shopping-list"
+        params = {
+            "limit": limit,
+            "offset": offset,
+            "sort": "createdAt desc",
+            "placeId": place_id or self.place_id,
+            "lang": "nl",
+            "prs": "true"
+        }
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url, params=params, headers=self.headers, cookies=self.cookies)
+            response.raise_for_status()
+            data = response.json()
+            raw_items = data.get("data", {}).get("items") or data.get("items", [])
+            return [ListItem(**i) for i in raw_items]
+
+    async def remove_item_from_list(self, item_id: str) -> bool:
+        """Remove a shopping list item by its list item ID (UUID)."""
+        url = f"{self.BASE_URL}/remove-item-from-list/{item_id}"
+        async with httpx.AsyncClient() as client:
+            response = await client.delete(url, headers=self.headers, cookies=self.cookies)
+            response.raise_for_status()
+            return response.status_code in (200, 204)
+
+    async def add_recipe(self, recipe_path: str) -> List[ListItem]:
+        """Parse an annotated recipe markdown file and add its resolved products to the shopping list."""
+        if not os.path.isfile(recipe_path):
+            raise FileNotFoundError(f"Recipe file not found: {recipe_path}")
+
+        with open(recipe_path, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        product_ids = _extract_resolved_product_ids(content)
+        if not product_ids:
+            raise ValueError(f"No resolved products found with [productId=...] in recipe {recipe_path}")
+
+        products = [Product(name=f"Product {pid}", product_id=pid) for pid in product_ids]
+        return await self.add_items_to_list(products)
+
+
+def _extract_resolved_product_ids(content: str) -> List[str]:
+    """Extract all product IDs formatted as [productId=...] in the text."""
+    pattern = r"\[productId=([a-zA-Z0-9_-]+)\]"
+    return re.findall(pattern, content)
+
 
 def _parse_rti_html(html: str) -> Dict[str, Optional[str]]:
     soup = BeautifulSoup(html, "html.parser")

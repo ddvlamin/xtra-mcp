@@ -1,84 +1,100 @@
-# Colruyt Xtra MCP Server
+# Colruyt Xtra MCP Server & Catalog Toolkit
 
-An MCP server for the Colruyt Xtra app, allowing AI assistants to manage your shopping list and process recipes.
+A modular Python toolkit and MCP server for the Colruyt Xtra supermarket service:
+- **`xtra/sdk`**: Clean Supermarket API client layer (Colruyt BFF endpoints).
+- **`xtra/catalog`**: Local SQLite product database, interactive ingredient lookup CLI (`xtra-ingest`), and deterministic recipe annotator (`xtra-annotate`).
+- **`xtra/mcp`**: FastMCP server providing explicit shopping list management tools for AI agents.
 
-## Features
+---
 
-- **resolve_ingredient**: Resolve an ingredient string to a Colruyt product using local SQLite fuzzy matching, catalog search API, and purchase history.
-- **store_resolved_product**: Save user-selected product mappings to the local SQLite database for future automatic matching.
-- **add_items_to_list**: Add products directly to your Colruyt shopping list.
-- **add_recipe_to_list**: Parse markdown recipe files and add ingredients with intelligent disambiguation.
+## Architecture Overview
+
+```
+xtra/
+├── sdk/                # Generic client interface & Colruyt API implementation
+│   ├── client.py       # SupermarketClient abstract class
+│   ├── colruyt.py      # ColruytClient (includes add_recipe method)
+│   └── models.py       # Domain models (Product, ListItem, ExtractedIngredient)
+├── catalog/            # Recipe annotation & local DB management
+│   ├── db.py           # SQLite database persistence (resources/colruyt_products.db)
+│   ├── extractor.py    # Markdown parsing for ## Ingredients & ## Resolved Products
+│   ├── ingest.py       # Interactive CLI to map ingredients to Colruyt products in DB
+│   └── annotate.py     # CLI to look up DB and annotate recipes in-place with product IDs
+└── mcp/                # Focused MCP server for AI agents
+    └── server.py       # FastMCP tools: lookup_products, add_items, remove_items, get_shopping_list
+```
+
+---
+
+## MCP Server Tools
+
+1. **`lookup_products_in_database(names: List[str])`**:
+   Look up product names in the local SQLite database. Returns matched product IDs and warnings for unresolved names.
+2. **`add_items_to_list(product_ids: List[str])`**:
+   Add items directly to the Colruyt shopping cart by their product IDs.
+3. **`get_shopping_list(limit: int = 255, offset: int = 0)`**:
+   Retrieve active items on the Colruyt shopping list with item UUIDs and completion status.
+4. **`remove_items_from_list(item_ids: List[str])`**:
+   Remove items from the Colruyt shopping list by their item UUIDs.
+
+---
+
+## CLI Tools
+
+### 1. Ingest Recipe Ingredients (`xtra-ingest`)
+Interactively resolve ingredients from recipes against the Colruyt API and store confirmed mappings in SQLite (`resources/colruyt_products.db`). Does **not** modify recipe files.
+
+```bash
+# Ingest from a single recipe
+uv run xtra-ingest --file "recipes/Vol-au-vent.md"
+
+# Ingest from a directory of recipes
+uv run xtra-ingest --dir "recipes/"
+```
+
+### 2. Annotate Recipes In-Place (`xtra-annotate`)
+Reads recipe ingredients, matches against local SQLite DB, emits warnings for missing items, and writes `## Resolved Products` with `[productId=...]` directly into the recipe markdown.
+
+```bash
+# Annotate a single recipe
+uv run xtra-annotate --file "recipes/Vol-au-vent.md"
+
+# Annotate all recipes in a folder
+uv run xtra-annotate --dir "recipes/"
+```
+
+---
+
+## Python SDK: Deterministic Recipe Cart Addition
+
+To add an annotated recipe directly to your Colruyt shopping cart without LLM disambiguation:
+
+```python
+import asyncio
+from xtra.sdk.colruyt import ColruytClient
+
+async def main():
+    client = ColruytClient()
+    added_items = await client.add_recipe("recipes/Vol-au-vent.md")
+    print(f"Added {len(added_items)} items to cart.")
+
+asyncio.run(main())
+```
+
+---
 
 ## Environment Variables
 
-The server requires the following environment variables (see `.env.example`):
-
-| Variable | Description | Example / Default |
+| Variable | Description | Default |
 | --- | --- | --- |
-| `CLPBFF_SESSION` | Colruyt Xtra session cookie ID | `your_session_id_here` |
-| `X_CG_APIKEY` | Colruyt Xtra API key (or `COLRUYT_API_KEY`) | `your_api_key_here` |
-| `COLRUYT_PLACE_ID` | Colruyt store / place ID | `2643` |
+| `CLPBFF_SESSION` | Colruyt Xtra session cookie ID (`clpbff_session`) | None |
+| `X_CG_APIKEY` | Colruyt API key (`x-cg-apikey`) | Colruyt default |
+| `COLRUYT_PLACE_ID` | Store ID (`placeId`) | `2643` |
 
-## Setup
+---
 
-1. Clone the repository.
-2. Install dependencies using `uv`:
-   ```bash
-   uv sync
-   ```
-3. Set environment variables in your environment or `.env` file:
-   ```bash
-   export CLPBFF_SESSION="your_session_id"
-   export X_CG_APIKEY="your_api_key_here"
-   export COLRUYT_PLACE_ID="2643"
-   ```
-
-## Running the Server
+## Running the MCP Server
 
 ```bash
-python xtra/server.py
+uv run xtra-mcp
 ```
-
-## AGY CLI MCP Configuration
-
-To install `server.py` as an MCP server in AGY CLI, add `colruyt-xtra` to `mcp_config.json` (located at `~/.gemini/antigravity-cli/mcp_config.json`):
-
-```json
-{
-  "mcpServers": {
-    "colruyt-xtra": {
-      "command": "python",
-      "args": [
-        "-m",
-        "xtra.server"
-      ],
-      "cwd": "/path/to/xtra-mcp",
-      "env": {
-        "PYTHONPATH": "/path/to/xtra-mcp",
-        "CLPBFF_SESSION": "your_session_id",
-        "X_CG_APIKEY": "your_api_key_here",
-        "COLRUYT_PLACE_ID": "2643"
-      }
-    }
-  }
-}
-```
-
-## Recipe Integration
-
-Place your markdown recipes in the `recipes/` folder. The server expects ingredients to be listed under a `## 🛒 Ingrediënten` header.
-
-Example:
-```markdown
-## 🛒 Ingrediënten
-* **Eiwit:** 3 kipfilets
-* **Groenten:** 1 rode paprika
-```
-
-## Intelligent Disambiguation
-
-When adding a recipe, the server:
-1. Searches for the ingredient.
-2. If multiple products match, it cross-references them with your "most bought" list.
-3. If it find a match you've bought before, it selects it automatically.
-4. Otherwise, it returns the options for the AI to ask you for confirmation.

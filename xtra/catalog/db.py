@@ -2,10 +2,22 @@ import os
 import sqlite3
 from typing import List, Optional
 from rapidfuzz import process, fuzz, utils
-from xtra.models import Product
-from xtra.migrations import run_migrations
+from xtra.sdk.models import Product
+
 
 DEFAULT_DB_PATH = os.path.join("resources", "colruyt_products.db")
+
+
+def run_migrations(conn: sqlite3.Connection):
+    """Runs database schema migrations on the SQLite connection."""
+    cursor = conn.cursor()
+    cursor.execute("PRAGMA table_info(products)")
+    columns = [col[1] for col in cursor.fetchall()]
+    if "normalized_name" in columns and "query" not in columns:
+        cursor.execute("ALTER TABLE products RENAME COLUMN normalized_name TO query")
+    if "top_category_name" not in columns:
+        cursor.execute("ALTER TABLE products ADD COLUMN top_category_name TEXT")
+
 
 class Database:
     def __init__(self, db_path: Optional[str] = None):
@@ -156,7 +168,7 @@ class Database:
 
         mapping_dict = {p.query: p for p in products if p.query}
         choices = list(mapping_dict.keys())
-        
+
         result = process.extractOne(query, choices, scorer=fuzz.token_sort_ratio, processor=utils.default_process)
         if result:
             matched_key, score, _ = result

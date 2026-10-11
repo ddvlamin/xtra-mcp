@@ -5,7 +5,7 @@ import sys
 # Ensure repository root is on sys.path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from xtra.db import Database
+from xtra.catalog.db import Database
 
 def main():
     parser = argparse.ArgumentParser(
