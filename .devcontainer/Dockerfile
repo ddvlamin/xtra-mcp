@@ -25,7 +25,7 @@ USER vscode
 # Copy project source code
 COPY . .
 
-RUN uvx --from omega-memory omega setup --download-model
+RUN uvx --from "omega-memory[server]" omega setup --download-model
 
 RUN uv tool install git+https://github.com/sydasif/web-search-mcp.git
 
