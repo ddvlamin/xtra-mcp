@@ -174,7 +174,11 @@ class ColruytClient(SupermarketClient):
             response = await client.get(url, params=params, headers=self.headers, cookies=self.cookies)
             response.raise_for_status()
             data = response.json()
-            raw_items = data.get("data", {}).get("items") or data.get("items", [])
+            raw_items = (
+                data.get("getListItems", {}).get("data")
+                or data.get("data", {}).get("items")
+                or data.get("items", [])
+            )
             return [ListItem(**i) for i in raw_items]
 
     async def remove_item_from_list(self, item_id: str) -> bool:

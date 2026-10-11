@@ -113,6 +113,36 @@ async def test_get_shopping_list():
 
 
 @pytest.mark.asyncio
+async def test_get_shopping_list_get_list_items_format():
+    client = ColruytClient(session_id="dummy", api_key="dummy", place_id="1234")
+    sample_response = {
+        "getListItems": {
+            "data": [
+                {
+                    "id": "uuid-2",
+                    "description": "BONI Hummus Pikant Basic",
+                    "productData": {"productId": "4855056", "quantity": 1, "unitCode": "P"},
+                    "completedAt": None,
+                    "createdAt": 1791714327.0,
+                    "updatedAt": "2026-10-11T10:25:27Z",
+                }
+            ]
+        }
+    }
+    mock_resp = MagicMock()
+    mock_resp.raise_for_status = MagicMock()
+    mock_resp.json = MagicMock(return_value=sample_response)
+
+    with patch("httpx.AsyncClient.get", AsyncMock(return_value=mock_resp)):
+        items = await client.get_shopping_list()
+        assert len(items) == 1
+        assert items[0].id == "uuid-2"
+        assert items[0].description == "BONI Hummus Pikant Basic"
+        assert items[0].productData.productId == "4855056"
+        assert items[0].createdAt == 1791714327.0
+
+
+@pytest.mark.asyncio
 async def test_remove_item_from_list():
     client = ColruytClient(session_id="dummy", api_key="dummy", place_id="1234")
     mock_resp = MagicMock()

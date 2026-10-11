@@ -67,12 +67,14 @@ class ProductData(BaseModel):
 
 
 class ListItem(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
     id: str
     description: str
     productData: Optional[ProductData] = None
-    createdAt: Optional[str] = None
-    updatedAt: Optional[str] = None
-    completedAt: Optional[str] = None
+    createdAt: Optional[Union[str, float, int]] = None
+    updatedAt: Optional[Union[str, float, int]] = None
+    completedAt: Optional[Union[str, float, int]] = None
 
 
 class AddItemsRequest(BaseModel):
