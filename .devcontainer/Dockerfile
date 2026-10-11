@@ -33,10 +33,18 @@ RUN curl -fsSL https://antigravity.google/cli/install.sh | sh
 RUN curl -fsSL https://opencode.ai/install | bash
 
 # Stow AI dotfiles
-RUN cd .ai-dotfiles && stow -v -d . -t ~ gemini claude codex vibe
-RUN mkdir -p ~/.config/opencode/skills && cd .ai-dotfiles && stow -v -d . -t ~/.config/opencode opencode
-RUN stow -v -t ~/.config/opencode/skills --no-folding .skills
-RUN mkdir -p ~/.agents/skills && stow -v -t ~/.agents/skills --no-folding .skills
+RUN if [ -d .ai-dotfiles ]; then \
+        cd .ai-dotfiles && for pkg in gemini claude codex vibe; do \
+            [ -d "$pkg" ] && stow -v -d . -t ~ "$pkg" || true; \
+        done; \
+    fi
+RUN if [ -d .ai-dotfiles/opencode ]; then \
+        mkdir -p ~/.config/opencode/skills && cd .ai-dotfiles && stow -v -d . -t ~/.config/opencode opencode || true; \
+    fi
+RUN if [ -d .skills ]; then \
+        mkdir -p ~/.config/opencode/skills && stow -v -t ~/.config/opencode/skills --no-folding .skills || true && \
+        mkdir -p ~/.agents/skills && stow -v -t ~/.agents/skills --no-folding .skills || true; \
+    fi
 
 # Preserve git config and ensure uv is in PATH for bash
 RUN echo 'git config --global user.email "ddvlamin@gmail.com"' >> ~/.bashrc && \

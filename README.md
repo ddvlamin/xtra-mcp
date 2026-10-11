@@ -96,5 +96,5 @@ asyncio.run(main())
 ## Running the MCP Server
 
 ```bash
-uv run xtra-mcp
+uv run --no-dev xtra-mcp
 ```
