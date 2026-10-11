@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "xtra-mcp"
 version = "0.1.0"
@@ -6,15 +10,29 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "mcp>=1.27.0",
-    "omega-memory[server]",
     "httpx",
     "pydantic",
-    "python-dotenv"
+    "python-dotenv",
+    "rapidfuzz>=3.0.0",
+    "beautifulsoup4>=4.12.0"
 ]
 
 [dependency-groups]
 dev = [
+    "omega-memory[server]",
     "pytest>=8.0.0",
     "pytest-asyncio>=0.23.0",
     "ipykernel"
 ]
+
+[project.scripts]
+xtra-mcp = "xtra.mcp.server:main"
+xtra-ingest = "xtra.catalog.ingest:main"
+xtra-annotate = "xtra.catalog.annotate:main"
+
+[tool.setuptools.packages.find]
+include = ["xtra*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+

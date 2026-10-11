@@ -8,16 +8,16 @@ USER root
 RUN curl -LsSf https://astral.sh/uv/install.sh | UV_INSTALL_DIR=/usr/local/bin sh
 
 # Set workspace
-WORKDIR /workspaces
+WORKDIR /workspace
 
 # [Optional] Add sudo support for the non-root user
 RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
     && apt-get -y install --no-install-recommends npm libsecret-1-0 sudo stow \
     && echo "vscode ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/vscode
 
-RUN npm install -g @modelcontextprotocol/server-filesystem
+RUN npm install -g @modelcontextprotocol/server-filesystem @modelcontextprotocol/server-github @modelcontextprotocol/server-sequential-thinking
 
-RUN chown -R vscode:vscode /workspaces
+RUN chown -R vscode:vscode /workspace
 
 # [Optional] Set the default user. Omit if you want to connect as root.
 USER vscode
@@ -25,18 +25,32 @@ USER vscode
 # Copy project source code
 COPY . .
 
-RUN uvx --from omega-memory omega setup --download-model
+RUN uvx --from "omega-memory[server]" omega setup --download-model
 
 RUN uv tool install git+https://github.com/sydasif/web-search-mcp.git
 
 RUN curl -fsSL https://antigravity.google/cli/install.sh | sh
+RUN curl -fsSL https://opencode.ai/install | bash
 
 # Stow AI dotfiles
-RUN cd .ai-dotfiles && stow -v -t ~ gemini claude codex vibe
+RUN if [ -d .ai-dotfiles ]; then \
+        cd .ai-dotfiles && for pkg in gemini claude codex vibe; do \
+            [ -d "$pkg" ] && stow -v -d . -t ~ "$pkg" || true; \
+        done; \
+    fi
+RUN if [ -d .ai-dotfiles/opencode ]; then \
+        mkdir -p ~/.config/opencode/skills && cd .ai-dotfiles && stow -v -d . -t ~/.config/opencode opencode || true; \
+    fi
+RUN if [ -d .skills ]; then \
+        mkdir -p ~/.config/opencode/skills && stow -v -t ~/.config/opencode/skills --no-folding .skills || true && \
+        mkdir -p ~/.agents/skills && stow -v -t ~/.agents/skills --no-folding .skills || true; \
+    fi
 
 # Preserve git config and ensure uv is in PATH for bash
 RUN echo 'git config --global user.email "ddvlamin@gmail.com"' >> ~/.bashrc && \
-    echo 'git config --global user.name "Dieter Devlaminck"' >> ~/.bashrc && \
-    echo 'export GITHUB_TOKEN=$(gh auth token 2>/dev/null)' >> ~/.bashrc
+    echo 'git config --global user.name "Dieter Devlaminck"' >> ~/.bashrc
 
+#ENV PATH="/home/vscode/.opencode/bin:${PATH}"
 ENV NO_BROWSER=true
+
+
